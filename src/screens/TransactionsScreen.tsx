@@ -9,6 +9,8 @@ import { CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currenc
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
 import AddTransactionModal from '../components/AddTransactionsModal';
 import AnimatedPressable from '../components/AnimatedPressable';
+import DeleteConfirmModal from '../components/DeleteConfirmModal';
+import SwipeableDeleteRow from '../components/SwipeableDeleteRow';
 import { Account, Category, Transaction } from '../types';
 
 export default function TransactionsScreen() {
@@ -19,6 +21,8 @@ export default function TransactionsScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+  const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const introProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -82,23 +86,18 @@ export default function TransactionsScreen() {
     setShowMonthPicker(true);
   }
 
-  function confirmDelete(t: Transaction) {
-    Alert.alert('Delete transaction?', `${t.categories?.name ?? 'Uncategorized'} ${formatMoney(Number(t.amount))} ${t.accounts?.currency ?? cur.base}`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const now = new Date().toISOString();
-          const { error } = await supabase
-            .from('transactions')
-            .update({ deleted_at: now, updated_at: now })
-            .eq('id', t.id);
-          if (error) return Alert.alert('Delete failed', error.message);
-          load();
-        },
-      },
-    ]);
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('transactions')
+      .update({ deleted_at: now, updated_at: now })
+      .eq('id', deleteTarget.id);
+    setDeleting(false);
+    if (error) return Alert.alert('Delete failed', error.message);
+    setDeleteTarget(null);
+    load();
   }
 
   return (
@@ -195,9 +194,11 @@ export default function TransactionsScreen() {
           renderItem={({ item }) => {
             const isIncome = item.kind === 'income';
             return (
-              <Pressable onLongPress={() => confirmDelete(item)} accessibilityRole="button"
-                accessibilityLabel={`${item.categories?.name ?? 'Uncategorized'}, ${isIncome ? 'income' : 'expense'}`}>
-                <View style={s.item}>
+              <SwipeableDeleteRow onDelete={() => setDeleteTarget(item)}
+                label="Delete" disabled={deleting}>
+                <Pressable accessibilityRole="button"
+                  accessibilityLabel={`${item.categories?.name ?? 'Uncategorized'}, ${isIncome ? 'income' : 'expense'}`}>
+                  <View style={s.item}>
                   <View style={[s.categoryIcon, isIncome ? s.incomeIcon : s.expenseIcon]}>
                     <Ionicons name={isIncome ? 'arrow-down' : 'arrow-up'} size={18}
                       color={isIncome ? '#16845A' : '#D45B55'} />
@@ -215,8 +216,9 @@ export default function TransactionsScreen() {
                     </Text>
                     <Text style={s.currencyCode}>{item.accounts?.currency}</Text>
                   </View>
-                </View>
-              </Pressable>
+                  </View>
+                </Pressable>
+              </SwipeableDeleteRow>
             );
           }}
           ListEmptyComponent={
@@ -238,6 +240,17 @@ export default function TransactionsScreen() {
         categories={categories}
         onClose={() => setShowAdd(false)}
         onSaved={load}
+      />
+
+      <DeleteConfirmModal
+        visible={deleteTarget !== null}
+        title="Delete transaction?"
+        detail={deleteTarget
+          ? `${deleteTarget.categories?.name ?? 'Uncategorized'} · ${formatMoney(Number(deleteTarget.amount))} ${deleteTarget.accounts?.currency ?? cur.base}`
+          : ''}
+        busy={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
       />
 
       <Modal
