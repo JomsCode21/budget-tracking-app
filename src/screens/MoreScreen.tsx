@@ -13,8 +13,24 @@ export default function MoreScreen() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ''));
+    supabase.auth.getUser()
+      .then(({ data, error }) => {
+        if (error) throw error;
+        setEmail(data.user?.email ?? '');
+      })
+      .catch((error: unknown) => {
+        Alert.alert('Could not load account', error instanceof Error ? error.message : String(error));
+      });
   }, []);
+
+  async function signOut() {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error: unknown) {
+      Alert.alert('Could not log out', error instanceof Error ? error.message : String(error));
+    }
+  }
 
   async function run(fn: () => Promise<number>, what: string) {
     setBusy(true);
@@ -77,7 +93,7 @@ export default function MoreScreen() {
         onPress={doRestore} />
 
       <View style={{ height: 8 }} />
-      <Button title="Log out" color="#c0392b" onPress={() => supabase.auth.signOut()} />
+      <Button title="Log out" color="#c0392b" onPress={signOut} />
     </View>
   );
 }

@@ -12,7 +12,8 @@ export async function processDueRules() {
     .eq('active', true)
     .is('deleted_at', null)
     .lte('next_due', today);
-  if (error || !data) return;
+  if (error) throw new Error(`Could not load recurring items: ${error.message}`);
+  if (!data) throw new Error('Could not load recurring items.');
 
   for (const r of data as RecurringRule[]) {
     const rows = [];
@@ -36,21 +37,25 @@ export async function processDueRules() {
     const ins = await supabase
       .from('transactions')
       .upsert(rows, { onConflict: 'recurring_rule_id,occurred_on', ignoreDuplicates: true });
-    if (ins.error) continue;
+    if (ins.error) throw new Error(`Could not create transactions for "${r.name}": ${ins.error.message}`);
 
-    await supabase
+    const updated = await supabase
       .from('recurring_rules')
       .update({ next_due: due, updated_at: new Date().toISOString() })
       .eq('id', r.id);
+    if (updated.error) {
+      throw new Error(`Transactions were created, but "${r.name}" could not be rescheduled: ${updated.error.message}`);
+    }
   }
 }
 
 export async function syncRecurring() {
   await processDueRules();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('recurring_rules')
     .select('*')
     .eq('active', true)
     .is('deleted_at', null);
+  if (error) throw new Error(`Could not load recurring items for reminders: ${error.message}`);
   await scheduleReminders((data ?? []) as RecurringRule[]);
 }

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
+import { CurrencyInfo, convert, loadCurrency } from '../lib/currency';
 import { Kind } from '../types';
 
 type Row = {
@@ -11,6 +12,7 @@ type Row = {
   amount: number;
   occurred_on: string;
   categories: { name: string } | null;
+  accounts: { currency: string } | null;
 };
 
 const key = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}`;
@@ -20,6 +22,7 @@ export default function ReportsScreen() {
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [rows, setRows] = useState<Row[]>([]);
+  const [cur, setCur] = useState<CurrencyInfo>({ base: 'PHP', rates: {} });
 
   // the 6 months ending at the selected month, oldest first
   const months = useMemo(() => {
@@ -35,14 +38,18 @@ export default function ReportsScreen() {
   const load = useCallback(async () => {
     const first = months[0];
     const nx = nextMonth(ym.y, ym.m);
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('kind, amount, occurred_on, categories(name)')
-      .is('deleted_at', null)
-      .gte('occurred_on', monthStart(first.y, first.m))
-      .lt('occurred_on', monthStart(nx.y, nx.m));
-    if (error) return Alert.alert('Load failed', error.message);
-    setRows(data as unknown as Row[]);
+    const [tx, currency] = await Promise.all([
+      supabase
+        .from('transactions')
+        .select('kind, amount, occurred_on, categories(name), accounts(currency)')
+        .is('deleted_at', null)
+        .gte('occurred_on', monthStart(first.y, first.m))
+        .lt('occurred_on', monthStart(nx.y, nx.m)),
+      loadCurrency(),
+    ]);
+    if (tx.error) return Alert.alert('Load failed', tx.error.message);
+    setRows(tx.data as unknown as Row[]);
+    setCur(currency);
   }, [months, ym]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -55,12 +62,13 @@ export default function ReportsScreen() {
         let expense = 0;
         for (const r of rows) {
           if (!r.occurred_on.startsWith(k)) continue;
-          if (r.kind === 'income') income += Number(r.amount);
-          else expense += Number(r.amount);
+          const amount = convert(Number(r.amount), r.accounts?.currency, cur);
+          if (r.kind === 'income') income += amount;
+          else expense += amount;
         }
         return { label: MONTH_NAMES[m].slice(0, 3), income, expense };
       }),
-    [rows, months]
+    [rows, months, cur]
   );
 
   const current = trend[trend.length - 1];
@@ -72,12 +80,12 @@ export default function ReportsScreen() {
     for (const r of rows) {
       if (r.kind !== 'expense' || !r.occurred_on.startsWith(k)) continue;
       const name = r.categories?.name ?? 'Uncategorized';
-      map[name] = (map[name] ?? 0) + Number(r.amount);
+      map[name] = (map[name] ?? 0) + convert(Number(r.amount), r.accounts?.currency, cur);
     }
     return Object.entries(map)
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total);
-  }, [rows, ym]);
+  }, [rows, ym, cur]);
 
   const topTotal = byCategory[0]?.total ?? 1;
 
@@ -85,6 +93,7 @@ export default function ReportsScreen() {
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <ScrollView contentContainerStyle={s.box}>
         <Text style={s.title}>Reports</Text>
+        <Text style={s.sub}>Totals in {cur.base}</Text>
 
         <View style={s.monthRow}>
           <Button title="<" onPress={() => setYm(prevMonth(ym.y, ym.m))} />

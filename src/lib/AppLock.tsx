@@ -1,10 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Button, StyleSheet, Text, View } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = 'appLockEnabled';
-const GRACE_MS = 15000; // locks again after being away longer than this
+const LEGACY_ASYNC_KEY = 'appLockEnabled';
 
 type Ctx = { enabled: boolean; setEnabled: (value: boolean) => Promise<boolean> };
 
@@ -23,7 +24,6 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
     const enabledRef = useRef(false);
     const authenticating = useRef(false);
-    const backgroundedAt = useRef<number | null>(null);
 
     // The system prompt itself makes the app go inactive/active, so changes
     // that happen while it is open (and just after) are ignored.
@@ -41,16 +41,37 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
-    // read the saved setting on start
+    // read the saved setting on start and migrate the legacy preference once
     useEffect(() => {
-        AsyncStorage.getItem(KEY)
-            .then((v) => {
+        SecureStore.isAvailableAsync()
+            .then(async (available) => {
+                let v: string | null = null;
+                if (available) {
+                    v = await SecureStore.getItemAsync(KEY);
+                    if (v === null) {
+                        const legacy = await AsyncStorage.getItem(LEGACY_ASYNC_KEY);
+                        if (legacy !== null) {
+                            await SecureStore.setItemAsync(KEY, legacy, {
+                                keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+                            });
+                            v = legacy;
+                            await AsyncStorage.removeItem(LEGACY_ASYNC_KEY);
+                        }
+                    }
+                } else {
+                    v = await AsyncStorage.getItem(LEGACY_ASYNC_KEY);
+                }
                 const on = v === '1';
                 enabledRef.current = on;
                 setEnabledState(on);
                 if (on) setLocked(true);
             })
-            .catch(() => { })
+            .catch((error: unknown) => {
+                Alert.alert(
+                    'App lock could not load',
+                    error instanceof Error ? error.message : String(error),
+                );
+            })
             .finally(() => setReady(true));
     }, []);
 
@@ -59,16 +80,13 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
         if (ready && locked) unlock();
     }, [ready, locked, unlock]);
 
-    // lock again after the app has been in the background for a while
+    // Lock immediately on background/inactive transitions so app content is
+    // not exposed in task-switcher previews or while the app is inactive.
     useEffect(() => {
         const sub = AppState.addEventListener('change', (state) => {
             if (authenticating.current || !enabledRef.current) return;
             if (state === 'background' || state === 'inactive') {
-                if (backgroundedAt.current === null) backgroundedAt.current = Date.now();
-            } else if (state === 'active') {
-                const at = backgroundedAt.current;
-                backgroundedAt.current = null;
-                if (at !== null && Date.now() - at > GRACE_MS) setLocked(true);
+                setLocked(true);
             }
         });
         return () => sub.remove();
@@ -95,9 +113,17 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
                 return false;
             }
 
-            await AsyncStorage.setItem(KEY, value ? '1' : '0');
+            if (await SecureStore.isAvailableAsync()) {
+                await SecureStore.setItemAsync(KEY, value ? '1' : '0', {
+                    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+                });
+                await AsyncStorage.removeItem(LEGACY_ASYNC_KEY);
+            } else {
+                await AsyncStorage.setItem(KEY, value ? '1' : '0');
+            }
             enabledRef.current = value;
             setEnabledState(value);
+            setLocked(false);
             return true;
         } catch (e: any) {
             Alert.alert('App lock error', e?.message ?? String(e));

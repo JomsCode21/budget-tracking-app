@@ -76,7 +76,11 @@ export default function RecurringScreen() {
     });
     if (error) return Alert.alert('Save failed', error.message);
     setShow(false);
-    await syncRecurring();
+    try {
+      await syncRecurring();
+    } catch (e: unknown) {
+      Alert.alert('Sync failed', e instanceof Error ? e.message : String(e));
+    }
     load();
   }
 
@@ -96,7 +100,11 @@ export default function RecurringScreen() {
       .update({ active: value, next_due: nextDue, updated_at: new Date().toISOString() })
       .eq('id', r.id);
     if (error) return Alert.alert('Update failed', error.message);
-    await syncRecurring();
+    try {
+      await syncRecurring();
+    } catch (e: unknown) {
+      Alert.alert('Sync failed', e instanceof Error ? e.message : String(e));
+    }
     load();
   }
 
@@ -113,7 +121,11 @@ export default function RecurringScreen() {
             .update({ deleted_at: now, updated_at: now })
             .eq('id', r.id);
           if (error) return Alert.alert('Delete failed', error.message);
-          await syncRecurring();
+          try {
+            await syncRecurring();
+          } catch (e: unknown) {
+            Alert.alert('Sync failed', e instanceof Error ? e.message : String(e));
+          }
           load();
         },
       },

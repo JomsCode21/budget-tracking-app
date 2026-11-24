@@ -23,7 +23,21 @@
     },
     "plugins": [
       "expo-status-bar",
-      "expo-sharing"
-    ]
+      "expo-sharing",
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a38a3d84-b48e-493d-8365-87718e38003a"
+      }
+    },
+    "owner": "jomscode21",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a38a3d84-b48e-493d-8365-87718e38003a"
+    }
   }
 }
