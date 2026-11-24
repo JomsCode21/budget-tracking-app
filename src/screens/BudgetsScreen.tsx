@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { ensureDefaultCategories } from '../lib/categories';
-import { CurrencyInfo, convert, loadCurrency } from '../lib/currency';
+import { CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currency';
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
 import { Budget, Category } from '../types';
 import AnimatedPressable from '../components/AnimatedPressable';
@@ -156,7 +156,7 @@ export default function BudgetsScreen() {
           <View style={s.summaryTop}>
             <View>
               <Text style={s.summaryLabel}>TOTAL SPENT</Text>
-              <Text style={s.summaryAmount}>{totalSpent.toFixed(2)}</Text>
+              <Text style={s.summaryAmount}>{formatMoney(totalSpent)}</Text>
             </View>
             <View style={s.summaryBadge}>
               <Ionicons name={remaining >= 0 ? 'trending-down-outline' : 'alert-circle-outline'} size={16}
@@ -170,12 +170,12 @@ export default function BudgetsScreen() {
           <View style={s.summaryStats}>
             <View style={s.summaryStat}>
               <Text style={s.summaryStatLabel}>BUDGETED</Text>
-              <Text style={s.summaryStatValue}>{totalBudget.toFixed(2)} <Text style={s.summaryCurrency}>{cur.base}</Text></Text>
+              <Text style={s.summaryStatValue}>{formatMoney(totalBudget)} <Text style={s.summaryCurrency}>{cur.base}</Text></Text>
             </View>
             <View style={s.summaryStatDivider} />
             <View style={s.summaryStat}>
               <Text style={s.summaryStatLabel}>{remaining >= 0 ? 'REMAINING' : 'OVER BUDGET'}</Text>
-              <Text style={[s.summaryStatValue, remaining < 0 && s.summaryOver]}>{Math.abs(remaining).toFixed(2)}</Text>
+              <Text style={[s.summaryStatValue, remaining < 0 && s.summaryOver]}>{formatMoney(remaining)}</Text>
             </View>
           </View>
         </View>
@@ -209,14 +209,14 @@ export default function BudgetsScreen() {
                     <Text style={s.categoryStatus}>
                       {limit
                         ? state === 'danger'
-                          ? `Over by ${(spent - limit).toFixed(2)} ${cur.base}`
-                          : `${(limit - spent).toFixed(2)} ${cur.base} left`
+                          ? `Over by ${formatMoney(spent - limit)} ${cur.base}`
+                          : `${formatMoney(limit - spent)} ${cur.base} left`
                         : 'Tap to set a monthly limit'}
                     </Text>
                   </View>
                   <View style={s.categoryAmount}>
-                    <Text style={s.categorySpent}>{spent.toFixed(2)}</Text>
-                    <Text style={s.categoryLimit}>{limit ? `of ${limit.toFixed(2)}` : 'No budget'}</Text>
+                    <Text style={s.categorySpent}>{formatMoney(spent)}</Text>
+                    <Text style={s.categoryLimit}>{limit ? `of ${formatMoney(limit)}` : 'No budget'}</Text>
                   </View>
                 </View>
                 {limit ? (

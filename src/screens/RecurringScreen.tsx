@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { ensureDefaultCategories } from '../lib/categories';
 import { nextOccurrence, todayLocal } from '../lib/dates';
 import { syncRecurring } from '../lib/recurring';
+import { formatMoney } from '../lib/currency';
 import Chip from '../components/Chip';
 import { Account, Category, Kind, RecurringRule } from '../types';
 
@@ -148,7 +149,7 @@ export default function RecurringScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.itemTitle}>{item.name}</Text>
                 <Text style={s.sub}>
-                  {item.kind === 'income' ? '+' : '-'}{Number(item.amount).toFixed(2)} {item.accounts?.currency} · {item.frequency}
+                  {item.kind === 'income' ? '+' : '-'}{formatMoney(Number(item.amount))} {item.accounts?.currency} · {item.frequency}
                 </Text>
                 <Text style={s.sub}>
                   {item.active ? `Next: ${item.next_due}` : 'Paused'}

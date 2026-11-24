@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { ensureDefaultCategories } from '../lib/categories';
-import { CurrencyInfo, convert, loadCurrency } from '../lib/currency';
+import { CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currency';
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
 import AddTransactionModal from '../components/AddTransactionsModal';
 import AnimatedPressable from '../components/AnimatedPressable';
@@ -83,7 +83,7 @@ export default function TransactionsScreen() {
   }
 
   function confirmDelete(t: Transaction) {
-    Alert.alert('Delete transaction?', `${t.categories?.name ?? 'Uncategorized'} ${Number(t.amount).toFixed(2)}`, [
+    Alert.alert('Delete transaction?', `${t.categories?.name ?? 'Uncategorized'} ${formatMoney(Number(t.amount))} ${t.accounts?.currency ?? cur.base}`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -125,7 +125,7 @@ export default function TransactionsScreen() {
             <Text style={s.currency}>In {cur.base}</Text>
           </View>
           <Text style={[s.netAmount, totals.net < 0 && s.negativeAmount]}>
-            {totals.net < 0 ? '-' : ''}{Math.abs(totals.net).toFixed(2)}
+            {totals.net < 0 ? '-' : ''}{formatMoney(totals.net)}
           </Text>
           <View style={s.summaryDivider} />
           <View style={s.totals}>
@@ -135,7 +135,7 @@ export default function TransactionsScreen() {
               </View>
               <View>
                 <Text style={s.sub}>Income</Text>
-                <Text style={[s.num, s.incomeText]}>{totals.income.toFixed(2)}</Text>
+                <Text style={[s.num, s.incomeText]}>{formatMoney(totals.income)}</Text>
               </View>
             </View>
             <View style={s.totalBlock}>
@@ -144,7 +144,7 @@ export default function TransactionsScreen() {
               </View>
               <View>
                 <Text style={s.sub}>Expenses</Text>
-                <Text style={[s.num, s.expenseText]}>{totals.expense.toFixed(2)}</Text>
+                <Text style={[s.num, s.expenseText]}>{formatMoney(totals.expense)}</Text>
               </View>
             </View>
           </View>
@@ -211,7 +211,7 @@ export default function TransactionsScreen() {
                   </View>
                   <View style={s.amountBlock}>
                     <Text style={[s.amount, isIncome ? s.incomeText : s.expenseText]}>
-                      {isIncome ? '+' : '-'}{Number(item.amount).toFixed(2)}
+                      {isIncome ? '+' : '-'}{formatMoney(Number(item.amount))}
                     </Text>
                     <Text style={s.currencyCode}>{item.accounts?.currency}</Text>
                   </View>

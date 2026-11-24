@@ -7,6 +7,13 @@ export const CURRENCIES = [
   'KRW', 'CNY', 'HKD', 'AED', 'SAR',
 ];
 
+export function formatMoney(value: number): string {
+  return new Intl.NumberFormat('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(value));
+}
+
 export async function loadCurrency(): Promise<CurrencyInfo> {
   const [s, r] = await Promise.all([
     supabase.from('user_settings').select('base_currency').maybeSingle(),

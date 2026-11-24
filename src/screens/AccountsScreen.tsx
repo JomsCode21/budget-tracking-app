@@ -3,7 +3,7 @@ import { View, Text, Button, Alert, FlatList, Pressable, Modal, TextInput, Scrol
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
-import { CURRENCIES, CurrencyInfo, convert, loadCurrency } from '../lib/currency';
+import { CURRENCIES, CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currency';
 import Chip from '../components/Chip';
 import { Account } from '../types';
 
@@ -97,7 +97,7 @@ export default function AccountsScreen() {
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <View style={s.box}>
         <Text style={s.sub}>Net worth ({cur.base})</Text>
-        <Text style={s.net}>{netWorth.toFixed(2)}</Text>
+        <Text style={s.net}>{formatMoney(netWorth)}</Text>
 
         <Button title="+ New account" onPress={openNew} />
 
@@ -113,7 +113,7 @@ export default function AccountsScreen() {
                 <Text style={s.sub}>{item.type} · {item.currency}</Text>
               </View>
               <Text style={s.itemTitle}>
-                {(balances[item.id] ?? Number(item.opening_balance)).toFixed(2)} {item.currency}
+                {formatMoney(balances[item.id] ?? Number(item.opening_balance))} {item.currency}
               </Text>
             </Pressable>
           )}

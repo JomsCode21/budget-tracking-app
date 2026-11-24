@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { todayLocal } from '../lib/dates';
+import { formatMoney } from '../lib/currency';
 import { Goal } from '../types';
 
 type ModalState =
@@ -71,7 +72,7 @@ export default function GoalsScreen() {
       if (!v || v <= 0) return Alert.alert('Enter an amount greater than 0');
       const saved = savedByGoal[modal.goal.id] ?? 0;
       if (modal.mode === 'withdraw' && v > saved) {
-        return Alert.alert('Not enough saved', `This goal only has ${saved.toFixed(2)}.`);
+        return Alert.alert('Not enough saved', `This goal only has ${formatMoney(saved)}.`);
       }
       const { error } = await supabase.from('goal_contributions').insert({
         goal_id: modal.goal.id,
@@ -125,7 +126,7 @@ export default function GoalsScreen() {
               <Pressable onLongPress={() => confirmDelete(item)} style={s.item}>
                 <View style={s.itemTop}>
                   <Text style={s.itemTitle}>{item.name}</Text>
-                  <Text style={s.sub}>{saved.toFixed(2)} / {target.toFixed(2)}</Text>
+                  <Text style={s.sub}>{formatMoney(saved)} / {formatMoney(target)}</Text>
                 </View>
                 <View style={s.barBg}>
                   <View style={[s.barFill, { width: `${pct}%`, backgroundColor: done ? '#1e8e3e' : '#2196f3' }]} />
@@ -133,7 +134,7 @@ export default function GoalsScreen() {
                 <Text style={s.sub}>
                   {done
                     ? 'Goal reached!'
-                    : `${Math.round(pct)}% · ${(target - saved).toFixed(2)} to go`}
+                    : `${Math.round(pct)}% · ${formatMoney(target - saved)} to go`}
                   {left !== null && !done
                     ? left >= 0 ? ` · ${left} days left` : ` · ${-left} days overdue`
                     : ''}

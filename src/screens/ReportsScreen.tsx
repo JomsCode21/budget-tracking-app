@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
-import { CurrencyInfo, convert, loadCurrency } from '../lib/currency';
+import { CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currency';
 import { Kind } from '../types';
 
 type Row = {
@@ -102,9 +102,9 @@ export default function ReportsScreen() {
         </View>
 
         <View style={s.totals}>
-          <View><Text style={s.sub}>Income</Text><Text style={[s.num, { color: '#1e8e3e' }]}>{current.income.toFixed(2)}</Text></View>
-          <View><Text style={s.sub}>Expenses</Text><Text style={[s.num, { color: '#c0392b' }]}>{current.expense.toFixed(2)}</Text></View>
-          <View><Text style={s.sub}>Net</Text><Text style={s.num}>{(current.income - current.expense).toFixed(2)}</Text></View>
+          <View><Text style={s.sub}>Income</Text><Text style={[s.num, { color: '#1e8e3e' }]}>{formatMoney(current.income)}</Text></View>
+          <View><Text style={s.sub}>Expenses</Text><Text style={[s.num, { color: '#c0392b' }]}>{formatMoney(current.expense)}</Text></View>
+          <View><Text style={s.sub}>Net</Text><Text style={s.num}>{formatMoney(current.income - current.expense)}</Text></View>
         </View>
 
         <Text style={s.section}>Last 6 months</Text>
@@ -133,7 +133,7 @@ export default function ReportsScreen() {
               <View style={s.catTop}>
                 <Text style={s.catName}>{c.name}</Text>
                 <Text style={s.sub}>
-                  {c.total.toFixed(2)} · {current.expense ? Math.round((c.total / current.expense) * 100) : 0}%
+                  {formatMoney(c.total)} · {current.expense ? Math.round((c.total / current.expense) * 100) : 0}%
                 </Text>
               </View>
               <View style={s.barBg}>
