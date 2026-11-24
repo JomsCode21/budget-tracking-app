@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, Alert, FlatList, Modal, Pressable, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, View, Text, Alert, FlatList, Modal, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import { ensureDefaultCategories } from '../lib/categories';
 import { CurrencyInfo, convert, loadCurrency } from '../lib/currency';
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
 import AddTransactionModal from '../components/AddTransactionsModal';
+import AnimatedPressable from '../components/AnimatedPressable';
 import { Account, Category, Transaction } from '../types';
 
 export default function TransactionsScreen() {
@@ -18,6 +19,15 @@ export default function TransactionsScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+  const introProgress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(introProgress, {
+      duration: 260,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [introProgress]);
   const [ym, setYm] = useState(() => {
     const now = new Date();
     return { y: now.getFullYear(), m: now.getMonth() };
@@ -99,12 +109,17 @@ export default function TransactionsScreen() {
             <Text style={s.kicker}>YOUR MONEY ACTIVITY</Text>
             <Text style={s.title}>Transactions</Text>
           </View>
-          <Pressable onPress={openAdd} style={s.headerAction} accessibilityRole="button" accessibilityLabel="Add transaction">
+          <AnimatedPressable onPress={openAdd} style={s.headerAction} accessibilityRole="button" accessibilityLabel="Add transaction">
             <Ionicons name="add" size={25} color="#FFFFFF" />
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
-        <View style={s.summaryCard}>
+        <Animated.View style={[s.summaryCard, {
+          opacity: introProgress,
+          transform: [{
+            translateY: introProgress.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }),
+          }],
+        }]}>
           <View style={s.summaryHeading}>
             <Text style={s.summaryLabel}>NET THIS PERIOD</Text>
             <Text style={s.currency}>In {cur.base}</Text>
@@ -133,39 +148,39 @@ export default function TransactionsScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         <View style={s.monthSelector}>
-          <Pressable
+          <AnimatedPressable
             onPress={() => setYm((current) => prevMonth(current.y, current.m))}
             style={s.monthButton}
             accessibilityRole="button"
             accessibilityLabel="Previous month"
           >
             <Ionicons name="chevron-back" size={19} color="#5865D9" />
-          </Pressable>
-          <Pressable onPress={openMonthPicker} style={s.monthLabel} accessibilityRole="button"
+          </AnimatedPressable>
+          <AnimatedPressable onPress={openMonthPicker} style={s.monthLabel} accessibilityRole="button"
             accessibilityLabel={`Choose month, currently ${MONTH_NAMES[ym.m]} ${ym.y}`}>
             <Text style={s.monthKicker}>SHOWING TRANSACTIONS FOR</Text>
             <View style={s.monthTextRow}>
               <Text style={s.monthText}>{MONTH_NAMES[ym.m]} {ym.y}</Text>
               <Ionicons name="chevron-down" size={16} color="#5865D9" />
             </View>
-          </Pressable>
-          <Pressable
+          </AnimatedPressable>
+          <AnimatedPressable
             onPress={() => setYm((current) => nextMonth(current.y, current.m))}
             style={s.monthButton}
             accessibilityRole="button"
             accessibilityLabel="Next month"
           >
             <Ionicons name="chevron-forward" size={19} color="#5865D9" />
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
-        <Pressable onPress={openAdd} style={({ pressed }) => [s.addButton, pressed && s.pressed]} accessibilityRole="button">
+        <AnimatedPressable onPress={openAdd} style={s.addButton} accessibilityRole="button">
           <Ionicons name="add-circle-outline" size={21} color="#FFFFFF" />
           <Text style={s.addButtonText}>Add transaction</Text>
-        </Pressable>
+        </AnimatedPressable>
 
         <View style={s.listHeader}>
           <Text style={s.sectionTitle}>Recent activity</Text>
@@ -209,9 +224,9 @@ export default function TransactionsScreen() {
               <View style={s.emptyIcon}><Ionicons name="receipt-outline" size={26} color="#5865D9" /></View>
               <Text style={s.emptyTitle}>No transactions yet</Text>
               <Text style={s.emptyText}>Add your first expense or income to start seeing your money story here.</Text>
-              <Pressable onPress={openAdd} style={s.emptyAction} accessibilityRole="button">
+              <AnimatedPressable onPress={openAdd} style={s.emptyAction} accessibilityRole="button">
                 <Text style={s.emptyActionText}>Add your first transaction</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           }
         />
