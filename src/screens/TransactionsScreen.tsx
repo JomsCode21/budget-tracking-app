@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, Alert, FlatList, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Alert, FlatList, Modal, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { ensureDefaultCategories } from '../lib/categories';
 import { CurrencyInfo, convert, loadCurrency } from '../lib/currency';
+import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
 import AddTransactionModal from '../components/AddTransactionsModal';
 import { Account, Category, Transaction } from '../types';
 
@@ -15,14 +16,24 @@ export default function TransactionsScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [cur, setCur] = useState<CurrencyInfo>({ base: 'PHP', rates: {} });
   const [showAdd, setShowAdd] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+  const [ym, setYm] = useState(() => {
+    const now = new Date();
+    return { y: now.getFullYear(), m: now.getMonth() };
+  });
 
   const load = useCallback(async () => {
     await ensureDefaultCategories();
+    const start = monthStart(ym.y, ym.m);
+    const end = nextMonth(ym.y, ym.m);
     const [tx, acc, cat] = await Promise.all([
       supabase
         .from('transactions')
         .select('*, categories(name), accounts(name, currency)')
         .is('deleted_at', null)
+        .gte('occurred_on', start)
+        .lt('occurred_on', monthStart(end.y, end.m))
         .order('occurred_on', { ascending: false })
         .order('created_at', { ascending: false }),
       supabase.from('accounts').select('*').is('deleted_at', null).order('created_at'),
@@ -34,7 +45,7 @@ export default function TransactionsScreen() {
     setAccounts(acc.data as Account[]);
     setCategories(cat.data as Category[]);
     setCur(await loadCurrency());
-  }, []);
+  }, [ym]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -54,6 +65,11 @@ export default function TransactionsScreen() {
       return Alert.alert('No account yet', 'Add an account first (More → Accounts).');
     }
     setShowAdd(true);
+  }
+
+  function openMonthPicker() {
+    setPickerYear(ym.y);
+    setShowMonthPicker(true);
   }
 
   function confirmDelete(t: Transaction) {
@@ -119,6 +135,33 @@ export default function TransactionsScreen() {
           </View>
         </View>
 
+        <View style={s.monthSelector}>
+          <Pressable
+            onPress={() => setYm((current) => prevMonth(current.y, current.m))}
+            style={s.monthButton}
+            accessibilityRole="button"
+            accessibilityLabel="Previous month"
+          >
+            <Ionicons name="chevron-back" size={19} color="#5865D9" />
+          </Pressable>
+          <Pressable onPress={openMonthPicker} style={s.monthLabel} accessibilityRole="button"
+            accessibilityLabel={`Choose month, currently ${MONTH_NAMES[ym.m]} ${ym.y}`}>
+            <Text style={s.monthKicker}>SHOWING TRANSACTIONS FOR</Text>
+            <View style={s.monthTextRow}>
+              <Text style={s.monthText}>{MONTH_NAMES[ym.m]} {ym.y}</Text>
+              <Ionicons name="chevron-down" size={16} color="#5865D9" />
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={() => setYm((current) => nextMonth(current.y, current.m))}
+            style={s.monthButton}
+            accessibilityRole="button"
+            accessibilityLabel="Next month"
+          >
+            <Ionicons name="chevron-forward" size={19} color="#5865D9" />
+          </Pressable>
+        </View>
+
         <Pressable onPress={openAdd} style={({ pressed }) => [s.addButton, pressed && s.pressed]} accessibilityRole="button">
           <Ionicons name="add-circle-outline" size={21} color="#FFFFFF" />
           <Text style={s.addButtonText}>Add transaction</Text>
@@ -181,6 +224,59 @@ export default function TransactionsScreen() {
         onClose={() => setShowAdd(false)}
         onSaved={load}
       />
+
+      <Modal
+        visible={showMonthPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMonthPicker(false)}
+      >
+        <Pressable style={s.modalOverlay} onPress={() => setShowMonthPicker(false)}>
+          <Pressable style={s.monthPickerCard} onPress={(event) => event.stopPropagation()}>
+            <View style={s.pickerHeader}>
+              <Text style={s.pickerTitle}>Choose a month</Text>
+              <Pressable onPress={() => setShowMonthPicker(false)} style={s.closeButton}
+                accessibilityRole="button" accessibilityLabel="Close month picker">
+                <Ionicons name="close" size={21} color="#697187" />
+              </Pressable>
+            </View>
+
+            <View style={s.yearSelector}>
+              <Pressable onPress={() => setPickerYear((year) => year - 1)} style={s.yearButton}
+                accessibilityRole="button" accessibilityLabel="Previous year">
+                <Ionicons name="chevron-back" size={18} color="#5865D9" />
+              </Pressable>
+              <Text style={s.yearText}>{pickerYear}</Text>
+              <Pressable onPress={() => setPickerYear((year) => year + 1)} style={s.yearButton}
+                accessibilityRole="button" accessibilityLabel="Next year">
+                <Ionicons name="chevron-forward" size={18} color="#5865D9" />
+              </Pressable>
+            </View>
+
+            <View style={s.monthGrid}>
+              {MONTH_NAMES.map((month, index) => {
+                const active = ym.y === pickerYear && ym.m === index;
+                return (
+                  <Pressable
+                    key={month}
+                    onPress={() => {
+                      setYm({ y: pickerYear, m: index });
+                      setShowMonthPicker(false);
+                    }}
+                    style={[s.monthOption, active && s.monthOptionActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${month} ${pickerYear}`}
+                  >
+                    <Text style={[s.monthOptionText, active && s.monthOptionTextActive]}>
+                      {month.slice(0, 3)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -208,6 +304,12 @@ const s = StyleSheet.create({
   incomeText: { color: '#16845A' },
   expenseText: { color: '#D45B55' },
   sub: { color: '#AEB6D4', fontSize: 12 },
+  monthSelector: { alignItems: 'center', backgroundColor: '#FFFFFF', borderColor: '#E8EAF1', borderRadius: 16, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginTop: 14, padding: 8 },
+  monthButton: { alignItems: 'center', backgroundColor: '#EEF0FF', borderRadius: 10, height: 38, justifyContent: 'center', width: 38 },
+  monthLabel: { alignItems: 'center' },
+  monthKicker: { color: '#8A91A4', fontSize: 9, fontWeight: '800', letterSpacing: 0.9 },
+  monthTextRow: { alignItems: 'center', flexDirection: 'row', gap: 5 },
+  monthText: { color: '#29304A', fontSize: 16, fontWeight: '800', marginTop: 3 },
   addButton: { alignItems: 'center', backgroundColor: '#5865D9', borderRadius: 14, flexDirection: 'row', justifyContent: 'center', marginTop: 14, minHeight: 50 },
   addButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', marginLeft: 8 },
   pressed: { opacity: 0.78 },
@@ -230,4 +332,17 @@ const s = StyleSheet.create({
   emptyText: { color: '#7C8496', fontSize: 13, lineHeight: 20, marginTop: 7, textAlign: 'center' },
   emptyAction: { backgroundColor: '#EEF0FF', borderRadius: 12, marginTop: 18, paddingHorizontal: 15, paddingVertical: 11 },
   emptyActionText: { color: '#5865D9', fontSize: 13, fontWeight: '800' },
+  modalOverlay: { backgroundColor: 'rgba(24, 29, 49, 0.48)', flex: 1, justifyContent: 'center', padding: 24 },
+  monthPickerCard: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 20 },
+  pickerHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  pickerTitle: { color: '#29304A', fontSize: 19, fontWeight: '800' },
+  closeButton: { alignItems: 'center', backgroundColor: '#F1F2F7', borderRadius: 10, height: 34, justifyContent: 'center', width: 34 },
+  yearSelector: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 22 },
+  yearButton: { alignItems: 'center', backgroundColor: '#EEF0FF', borderRadius: 10, height: 38, justifyContent: 'center', width: 38 },
+  yearText: { color: '#20263B', fontSize: 22, fontWeight: '800' },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', marginTop: 22 },
+  monthOption: { alignItems: 'center', backgroundColor: '#F7F8FC', borderRadius: 12, height: 46, justifyContent: 'center', width: '29%' },
+  monthOptionActive: { backgroundColor: '#5865D9' },
+  monthOptionText: { color: '#697187', fontSize: 14, fontWeight: '700' },
+  monthOptionTextActive: { color: '#FFFFFF' },
 });
