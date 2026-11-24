@@ -295,12 +295,12 @@ export default function BudgetsScreen() {
               {MONTH_NAMES.map((month, index) => {
                 const active = ym.y === pickerYear && ym.m === index;
                 return (
-                  <AnimatedPressable key={month}
+                  <Pressable key={month}
                     onPress={() => { setYm({ y: pickerYear, m: index }); setShowMonthPicker(false); }}
                     style={[s.monthOption, active && s.monthOptionActive]} accessibilityRole="button"
                     accessibilityLabel={`${month} ${pickerYear}`}>
                     <Text style={[s.monthOptionText, active && s.monthOptionTextActive]}>{month.slice(0, 3)}</Text>
-                  </AnimatedPressable>
+                  </Pressable>
                 );
               })}
             </View>
@@ -382,6 +382,6 @@ const s = StyleSheet.create({
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 10, justifyContent: 'space-between', rowGap: 10, marginTop: 18 },
   monthOption: { alignItems: 'center', backgroundColor: '#F7F8FC', borderColor: '#E1E4ED', borderRadius: 12, borderWidth: 1, height: 54, justifyContent: 'center', width: '31%' },
   monthOptionActive: { backgroundColor: '#5865D9' },
-  monthOptionText: { color: '#697187', fontSize: 14, fontWeight: '700' },
+  monthOptionText: { color: '#697187', fontSize: 15, fontWeight: '800', lineHeight: 18, textAlign: 'center' },
   monthOptionTextActive: { color: '#FFFFFF' },
 });
