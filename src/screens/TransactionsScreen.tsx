@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, Button, Alert, FlatList, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Alert, FlatList, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { ensureDefaultCategories } from '../lib/categories';
@@ -75,39 +76,101 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={s.safeArea} edges={['top']}>
       <View style={s.box}>
-        <Text style={s.title}>Transactions</Text>
-        <Text style={[s.sub, { marginBottom: 8 }]}>Totals in {cur.base}</Text>
-
-        <View style={s.totals}>
-          <View><Text style={s.sub}>Income</Text><Text style={[s.num, { color: '#1e8e3e' }]}>{totals.income.toFixed(2)}</Text></View>
-          <View><Text style={s.sub}>Expenses</Text><Text style={[s.num, { color: '#c0392b' }]}>{totals.expense.toFixed(2)}</Text></View>
-          <View><Text style={s.sub}>Net</Text><Text style={s.num}>{totals.net.toFixed(2)}</Text></View>
+        <View style={s.header}>
+          <View>
+            <Text style={s.kicker}>YOUR MONEY ACTIVITY</Text>
+            <Text style={s.title}>Transactions</Text>
+          </View>
+          <Pressable onPress={openAdd} style={s.headerAction} accessibilityRole="button" accessibilityLabel="Add transaction">
+            <Ionicons name="add" size={25} color="#FFFFFF" />
+          </Pressable>
         </View>
 
-        <Button title="+ Add transaction" onPress={openAdd} />
+        <View style={s.summaryCard}>
+          <View style={s.summaryHeading}>
+            <Text style={s.summaryLabel}>NET THIS PERIOD</Text>
+            <Text style={s.currency}>In {cur.base}</Text>
+          </View>
+          <Text style={[s.netAmount, totals.net < 0 && s.negativeAmount]}>
+            {totals.net < 0 ? '-' : ''}{Math.abs(totals.net).toFixed(2)}
+          </Text>
+          <View style={s.summaryDivider} />
+          <View style={s.totals}>
+            <View style={s.totalBlock}>
+              <View style={[s.totalIcon, s.incomeIcon]}>
+                <Ionicons name="arrow-down" size={15} color="#16845A" />
+              </View>
+              <View>
+                <Text style={s.sub}>Income</Text>
+                <Text style={[s.num, s.incomeText]}>{totals.income.toFixed(2)}</Text>
+              </View>
+            </View>
+            <View style={s.totalBlock}>
+              <View style={[s.totalIcon, s.expenseIcon]}>
+                <Ionicons name="arrow-up" size={15} color="#D45B55" />
+              </View>
+              <View>
+                <Text style={s.sub}>Expenses</Text>
+                <Text style={[s.num, s.expenseText]}>{totals.expense.toFixed(2)}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <Pressable onPress={openAdd} style={({ pressed }) => [s.addButton, pressed && s.pressed]} accessibilityRole="button">
+          <Ionicons name="add-circle-outline" size={21} color="#FFFFFF" />
+          <Text style={s.addButtonText}>Add transaction</Text>
+        </Pressable>
+
+        <View style={s.listHeader}>
+          <Text style={s.sectionTitle}>Recent activity</Text>
+          <Text style={s.count}>{transactions.length} {transactions.length === 1 ? 'entry' : 'entries'}</Text>
+        </View>
 
         <FlatList
-          style={{ marginTop: 12 }}
+          style={s.list}
+          contentContainerStyle={transactions.length === 0 ? s.emptyList : undefined}
           data={transactions}
           keyExtractor={(t) => t.id}
-          renderItem={({ item }) => (
-            <Pressable onLongPress={() => confirmDelete(item)}>
-              <View style={s.item}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.itemTitle}>{item.categories?.name ?? 'Uncategorized'}</Text>
-                  <Text style={s.sub}>
-                    {item.occurred_on} · {item.accounts?.name}{item.note ? ` · ${item.note}` : ''}
-                  </Text>
+          renderItem={({ item }) => {
+            const isIncome = item.kind === 'income';
+            return (
+              <Pressable onLongPress={() => confirmDelete(item)} accessibilityRole="button"
+                accessibilityLabel={`${item.categories?.name ?? 'Uncategorized'}, ${isIncome ? 'income' : 'expense'}`}>
+                <View style={s.item}>
+                  <View style={[s.categoryIcon, isIncome ? s.incomeIcon : s.expenseIcon]}>
+                    <Ionicons name={isIncome ? 'arrow-down' : 'arrow-up'} size={18}
+                      color={isIncome ? '#16845A' : '#D45B55'} />
+                  </View>
+                  <View style={s.itemInfo}>
+                    <Text style={s.itemTitle}>{item.categories?.name ?? 'Uncategorized'}</Text>
+                    <Text style={s.sub} numberOfLines={1}>
+                      {item.accounts?.name ?? 'Unknown account'} · {item.occurred_on}
+                    </Text>
+                    {item.note ? <Text style={s.note} numberOfLines={1}>{item.note}</Text> : null}
+                  </View>
+                  <View style={s.amountBlock}>
+                    <Text style={[s.amount, isIncome ? s.incomeText : s.expenseText]}>
+                      {isIncome ? '+' : '-'}{Number(item.amount).toFixed(2)}
+                    </Text>
+                    <Text style={s.currencyCode}>{item.accounts?.currency}</Text>
+                  </View>
                 </View>
-                <Text style={{ color: item.kind === 'income' ? '#1e8e3e' : '#c0392b', fontWeight: '600' }}>
-                  {item.kind === 'income' ? '+' : '-'}{Number(item.amount).toFixed(2)} {item.accounts?.currency}
-                </Text>
-              </View>
-            </Pressable>
-          )}
-          ListEmptyComponent={<Text style={s.sub}>No transactions yet. Long-press one to delete it.</Text>}
+              </Pressable>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={s.emptyState}>
+              <View style={s.emptyIcon}><Ionicons name="receipt-outline" size={26} color="#5865D9" /></View>
+              <Text style={s.emptyTitle}>No transactions yet</Text>
+              <Text style={s.emptyText}>Add your first expense or income to start seeing your money story here.</Text>
+              <Pressable onPress={openAdd} style={s.emptyAction} accessibilityRole="button">
+                <Text style={s.emptyActionText}>Add your first transaction</Text>
+              </Pressable>
+            </View>
+          }
         />
       </View>
 
@@ -123,11 +186,48 @@ export default function TransactionsScreen() {
 }
 
 const s = StyleSheet.create({
-  box: { flex: 1, padding: 20 },
-  title: { fontSize: 22, fontWeight: '600', marginBottom: 4 },
-  totals: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  num: { fontSize: 18, fontWeight: '600' },
-  sub: { color: '#666', fontSize: 13 },
-  item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#ddd' },
-  itemTitle: { fontSize: 16, fontWeight: '500' },
+  safeArea: { backgroundColor: '#F6F7FB', flex: 1 },
+  box: { flex: 1, paddingHorizontal: 20 },
+  header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 20, paddingTop: 18 },
+  kicker: { color: '#5865D9', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 5 },
+  title: { color: '#20263B', fontSize: 30, fontWeight: '800', letterSpacing: -0.5 },
+  headerAction: { alignItems: 'center', backgroundColor: '#5865D9', borderRadius: 15, height: 46, justifyContent: 'center', width: 46 },
+  summaryCard: { backgroundColor: '#29304A', borderRadius: 22, padding: 20 },
+  summaryHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  summaryLabel: { color: '#AEB6D4', fontSize: 11, fontWeight: '800', letterSpacing: 1.1 },
+  currency: { color: '#C9CEE1', fontSize: 12 },
+  netAmount: { color: '#FFFFFF', fontSize: 32, fontWeight: '800', letterSpacing: -0.5, marginTop: 8 },
+  negativeAmount: { color: '#FFB0A9' },
+  summaryDivider: { backgroundColor: '#4A5271', height: 1, marginVertical: 17 },
+  totals: { flexDirection: 'row', justifyContent: 'space-between' },
+  totalBlock: { alignItems: 'center', flexDirection: 'row', minWidth: '45%' },
+  totalIcon: { alignItems: 'center', borderRadius: 10, height: 30, justifyContent: 'center', marginRight: 9, width: 30 },
+  incomeIcon: { backgroundColor: '#DDF5EA' },
+  expenseIcon: { backgroundColor: '#FDE5E2' },
+  num: { fontSize: 16, fontWeight: '800', marginTop: 2 },
+  incomeText: { color: '#16845A' },
+  expenseText: { color: '#D45B55' },
+  sub: { color: '#AEB6D4', fontSize: 12 },
+  addButton: { alignItems: 'center', backgroundColor: '#5865D9', borderRadius: 14, flexDirection: 'row', justifyContent: 'center', marginTop: 14, minHeight: 50 },
+  addButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', marginLeft: 8 },
+  pressed: { opacity: 0.78 },
+  listHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 9, marginTop: 25 },
+  sectionTitle: { color: '#29304A', fontSize: 18, fontWeight: '800' },
+  count: { color: '#8A91A4', fontSize: 12 },
+  list: { flex: 1 },
+  item: { alignItems: 'center', backgroundColor: '#FFFFFF', borderColor: '#E8EAF1', borderRadius: 16, borderWidth: 1, flexDirection: 'row', marginBottom: 10, minHeight: 78, paddingHorizontal: 13, paddingVertical: 12 },
+  categoryIcon: { alignItems: 'center', borderRadius: 13, height: 42, justifyContent: 'center', marginRight: 11, width: 42 },
+  itemInfo: { flex: 1, minWidth: 0 },
+  itemTitle: { color: '#29304A', fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  note: { color: '#8A91A4', fontSize: 11, marginTop: 3 },
+  amountBlock: { alignItems: 'flex-end', marginLeft: 8 },
+  amount: { fontSize: 15, fontWeight: '800' },
+  currencyCode: { color: '#9AA1B2', fontSize: 10, marginTop: 3 },
+  emptyList: { flexGrow: 1 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 42 },
+  emptyIcon: { alignItems: 'center', backgroundColor: '#E9EBFF', borderRadius: 20, height: 58, justifyContent: 'center', width: 58 },
+  emptyTitle: { color: '#29304A', fontSize: 17, fontWeight: '800', marginTop: 15 },
+  emptyText: { color: '#7C8496', fontSize: 13, lineHeight: 20, marginTop: 7, textAlign: 'center' },
+  emptyAction: { backgroundColor: '#EEF0FF', borderRadius: 12, marginTop: 18, paddingHorizontal: 15, paddingVertical: 11 },
+  emptyActionText: { color: '#5865D9', fontSize: 13, fontWeight: '800' },
 });
