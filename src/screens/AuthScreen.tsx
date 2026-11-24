@@ -1,31 +1,33 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, Alert, Pressable, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, TextInput } from 'react-native';
 import { supabase } from '../lib/supabase';
+import LoginScreen from './auth/LoginScreen';
+import SignupScreen from './auth/SignupScreen';
+import {
+  AuthField,
+  AuthLayout,
+  CodeField,
+  LinkText,
+  PasswordField,
+  PrimaryButton,
+  authStyles as s,
+} from './auth/AuthLayout';
 
-type Mode = 'login' | 'verify' | 'forgot' | 'reset';
-
+type Mode = 'login' | 'signup' | 'verify' | 'forgot' | 'reset';
 const MIN_PASSWORD = 8;
-
-function LinkText({ label, onPress }: { label: string; onPress: () => void }) {
-  return React.createElement(
-    Pressable,
-    { onPress, style: { paddingVertical: 10 } },
-    React.createElement(Text, { style: s.link }, label),
-  );
-}
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const cleanEmail = email.trim();
-  const errorMessage = (error: unknown) =>
-    error instanceof Error ? error.message : String(error);
+  const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
   async function runAuth(title: string, operation: () => Promise<void>) {
     if (busy) return;
@@ -45,15 +47,6 @@ export default function AuthScreen() {
       return true;
     }
     return false;
-  }
-
-  async function resendCode() {
-    if (needEmail()) return;
-    await runAuth('Could not resend', async () => {
-      const { error } = await supabase.auth.resend({ type: 'signup', email: cleanEmail });
-      if (error) throw error;
-      Alert.alert('Code sent', 'Check your email.');
-    });
   }
 
   async function signIn() {
@@ -78,10 +71,22 @@ export default function AuthScreen() {
     if (password.length < MIN_PASSWORD) {
       return Alert.alert('Password too short', `Use at least ${MIN_PASSWORD} characters.`);
     }
+    if (password !== confirmPassword) {
+      return Alert.alert('Passwords do not match', 'Make sure both password fields are the same.');
+    }
     await runAuth('Sign up failed', async () => {
       const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password });
       if (error) throw error;
-      if (!data.session) setMode('verify'); // email confirmation is on: wait for the code
+      if (!data.session) setMode('verify');
+    });
+  }
+
+  async function resendCode() {
+    if (needEmail()) return;
+    await runAuth('Could not resend', async () => {
+      const { error } = await supabase.auth.resend({ type: 'signup', email: cleanEmail });
+      if (error) throw error;
+      Alert.alert('Code sent', 'Check your email.');
     });
   }
 
@@ -91,18 +96,15 @@ export default function AuthScreen() {
     await runAuth('Code not accepted', async () => {
       const { error } = await supabase.auth.verifyOtp({ email: cleanEmail, token: code.trim(), type: 'signup' });
       if (error) throw error;
-      // on success the session is created and the app switches screens by itself
     });
   }
 
   async function sendResetCode() {
     if (needEmail()) return;
     await runAuth('Could not send code', async () => {
-      // The Supabase recovery email template must use {{ .Token }} rather than
-      // the default recovery link because this screen accepts an OTP.
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
       if (error) throw error;
-      Alert.alert('Check your email', 'If an account exists for that email, we sent a verification code.');
+      Alert.alert('Check your email', 'If an account exists for that email, we sent you a verification code.');
       setMode('reset');
     });
   }
@@ -116,71 +118,77 @@ export default function AuthScreen() {
     await runAuth('Could not set password', async () => {
       const { error } = await supabase.auth.verifyOtp({ email: cleanEmail, token: code.trim(), type: 'recovery' });
       if (error) throw error;
-      // the code signed us in; now set the new password
       const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
       if (updateError) throw updateError;
       Alert.alert('Password changed', 'You are now signed in.');
     });
   }
 
-  const h = React.createElement;
-  const emailInput = h(TextInput, {
-    style: s.input,
-    placeholder: 'Email',
-    autoCapitalize: 'none',
-    keyboardType: 'email-address',
-    value: email,
-    onChangeText: setEmail,
-  });
+  if (mode === 'login') {
+    return (
+      <LoginScreen email={email} password={password} busy={busy} showPassword={showPassword}
+        onEmailChange={setEmail} onPasswordChange={setPassword}
+        onTogglePassword={() => setShowPassword((current) => !current)} onLogin={signIn}
+        onCreateAccount={() => {
+          setPassword('');
+          setConfirmPassword('');
+          setMode('signup');
+        }}
+        onForgotPassword={() => setMode('forgot')} />
+    );
+  }
 
-  return h(SafeAreaView, { style: { flex: 1 } },
-    h(View, { style: s.box },
-      h(Text, { style: s.title }, 'Budget Tracker'),
+  if (mode === 'signup') {
+    return (
+      <SignupScreen email={email} password={password} confirmPassword={confirmPassword} busy={busy}
+        showPassword={showPassword} onEmailChange={setEmail} onPasswordChange={setPassword}
+        onConfirmPasswordChange={setConfirmPassword}
+        onTogglePassword={() => setShowPassword((current) => !current)} onCreateAccount={signUp}
+        onBackToLogin={() => setMode('login')} />
+    );
+  }
 
-      mode === 'login' && h(React.Fragment, null,
-        emailInput,
-        h(TextInput, { style: s.input, placeholder: 'Password', secureTextEntry: true,
-          value: password, onChangeText: setPassword }),
-        h(Button, { title: 'Log in', onPress: signIn, disabled: busy }),
-        h(View, { style: { height: 8 } }),
-        h(Button, { title: 'Sign up', onPress: signUp, disabled: busy }),
-        h(LinkText, { label: 'Forgot password?', onPress: () => setMode('forgot') }),
-      ),
+  if (mode === 'verify') {
+    return (
+      <AuthLayout eyebrow="CHECK YOUR EMAIL" title={'One quick step\nto get started.'}
+        help={`We emailed a 6-digit code to ${cleanEmail || 'you'}.`}>
+        <CodeField value={code} onChangeText={setCode} />
+        <PrimaryButton label="Confirm code" onPress={verifyCode} busy={busy} />
+        <LinkText label="Resend code" onPress={resendCode} />
+        <LinkText label="Back to log in" onPress={() => setMode('login')} />
+      </AuthLayout>
+    );
+  }
 
-      mode === 'verify' && h(React.Fragment, null,
-        h(Text, { style: s.help }, `We emailed a 6-digit code to ${cleanEmail || 'you'}. Enter it below.`),
-        h(TextInput, { style: s.input, placeholder: 'Code', keyboardType: 'number-pad',
-          value: code, onChangeText: setCode, autoFocus: true }),
-        h(Button, { title: 'Confirm', onPress: verifyCode, disabled: busy }),
-        h(LinkText, { label: 'Resend code', onPress: resendCode }),
-        h(LinkText, { label: 'Back to log in', onPress: () => setMode('login') }),
-      ),
+  if (mode === 'forgot') {
+    return (
+      <AuthLayout eyebrow="RESET PASSWORD" title={'Let’s get you\nback in.'}
+        help="Enter your email and we will send you a verification code.">
+        <AuthField label="Email address" icon="mail-outline">
+          <TextInput style={s.input} placeholder="you@example.com" placeholderTextColor="#9AA1B2"
+            autoCapitalize="none" autoCorrect={false} keyboardType="email-address" value={email}
+            onChangeText={setEmail} textContentType="emailAddress" accessibilityLabel="Email address" />
+        </AuthField>
+        <PrimaryButton label="Send code" onPress={sendResetCode} busy={busy} />
+        <LinkText label="Back to log in" onPress={() => setMode('login')} />
+      </AuthLayout>
+    );
+  }
 
-      mode === 'forgot' && h(React.Fragment, null,
-        h(Text, { style: s.help }, 'Enter your email and we will send you a code.'),
-        emailInput,
-        h(Button, { title: 'Send code', onPress: sendResetCode, disabled: busy }),
-        h(LinkText, { label: 'Back to log in', onPress: () => setMode('login') }),
-      ),
-
-      mode === 'reset' && h(React.Fragment, null,
-        h(Text, { style: s.help }, 'Enter the code from your email and choose a new password.'),
-        emailInput,
-        h(TextInput, { style: s.input, placeholder: 'Code', keyboardType: 'number-pad',
-          value: code, onChangeText: setCode }),
-        h(TextInput, { style: s.input, placeholder: `New password (min ${MIN_PASSWORD})`, secureTextEntry: true,
-          value: newPassword, onChangeText: setNewPassword }),
-        h(Button, { title: 'Change password', onPress: resetPassword, disabled: busy }),
-        h(LinkText, { label: 'Back to log in', onPress: () => setMode('login') }),
-      ),
-    ),
+  return (
+    <AuthLayout eyebrow="CREATE A NEW PASSWORD" title={'Choose a new\npassword.'}
+      help="Enter the code from your email and choose a new password.">
+      <AuthField label="Email address" icon="mail-outline">
+        <TextInput style={s.input} placeholder="you@example.com" placeholderTextColor="#9AA1B2"
+          autoCapitalize="none" autoCorrect={false} keyboardType="email-address" value={email}
+          onChangeText={setEmail} textContentType="emailAddress" accessibilityLabel="Email address" />
+      </AuthField>
+      <CodeField value={code} onChangeText={setCode} />
+      <PasswordField label="New password" value={newPassword} onChangeText={setNewPassword}
+        placeholder={`At least ${MIN_PASSWORD} characters`} showPassword={showPassword}
+        onToggleVisibility={() => setShowPassword((current) => !current)} />
+      <PrimaryButton label="Change password" onPress={resetPassword} busy={busy} />
+      <LinkText label="Back to log in" onPress={() => setMode('login')} />
+    </AuthLayout>
   );
 }
-
-const s = StyleSheet.create({
-  box: { flex: 1, padding: 20, justifyContent: 'center' },
-  title: { fontSize: 22, fontWeight: '600', marginBottom: 16 },
-  help: { color: '#555', marginBottom: 12 },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, marginBottom: 10 },
-  link: { color: '#2196f3', textAlign: 'center' },
-});
