@@ -3,9 +3,10 @@ import { View, Text, Button, Alert, FlatList, Pressable, Modal, TextInput, Scrol
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
-import { CURRENCIES, CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currency';
+import { CURRENCIES, CurrencyInfo, convertToCurrency, formatMoney, getCurrencySymbol, loadCurrency } from '../lib/currency';
 import Chip from '../components/Chip';
 import { Account } from '../types';
+import { CurrencySelector, useDisplayCurrency } from '../components/DisplayCurrency';
 
 const TYPES = [
   { value: 'cash', label: 'Cash' },
@@ -14,6 +15,7 @@ const TYPES = [
 ];
 
 export default function AccountsScreen() {
+  const { currency: displayCurrency } = useDisplayCurrency();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [cur, setCur] = useState<CurrencyInfo>({ base: 'PHP', rates: {} });
@@ -41,7 +43,12 @@ export default function AccountsScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const netWorth = accounts.reduce(
-    (sum, a) => sum + convert(balances[a.id] ?? Number(a.opening_balance), a.currency, cur),
+    (sum, a) => sum + convertToCurrency(
+      balances[a.id] ?? Number(a.opening_balance),
+      a.currency,
+      displayCurrency,
+      cur,
+    ),
     0
   );
 
@@ -96,8 +103,11 @@ export default function AccountsScreen() {
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <View style={s.box}>
-        <Text style={s.sub}>Net worth ({cur.base})</Text>
-        <Text style={s.net}>{formatMoney(netWorth)}</Text>
+        <View style={s.netHeader}>
+          <Text style={s.sub}>Total balance</Text>
+          <CurrencySelector />
+        </View>
+        <Text style={s.net}>{formatMoney(netWorth, displayCurrency)}</Text>
 
         <Button title="+ New account" onPress={openNew} />
 
@@ -113,7 +123,15 @@ export default function AccountsScreen() {
                 <Text style={s.sub}>{item.type} · {item.currency}</Text>
               </View>
               <Text style={s.itemTitle}>
-                {formatMoney(balances[item.id] ?? Number(item.opening_balance))} {item.currency}
+                {formatMoney(
+                  convertToCurrency(
+                    balances[item.id] ?? Number(item.opening_balance),
+                    item.currency,
+                    displayCurrency,
+                    cur,
+                  ),
+                  displayCurrency,
+                )}
               </Text>
             </Pressable>
           )}
@@ -140,7 +158,9 @@ export default function AccountsScreen() {
               ))}
             </View>
 
-            <TextInput style={s.input} placeholder="Opening balance (optional)" keyboardType="decimal-pad"
+            <TextInput style={s.input}
+              placeholder={`Opening balance (${getCurrencySymbol(currency)} ${currency}, optional)`}
+              keyboardType="decimal-pad"
               value={opening} onChangeText={setOpening} />
 
             <Button title="Save" onPress={create} />
@@ -155,6 +175,7 @@ export default function AccountsScreen() {
 
 const s = StyleSheet.create({
   box: { flex: 1, padding: 20 },
+  netHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   title: { fontSize: 22, fontWeight: '600', marginBottom: 16 },
   net: { fontSize: 28, fontWeight: '700', marginBottom: 16 },
   label: { fontWeight: '600', marginTop: 8, marginBottom: 6 },

@@ -6,6 +6,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import { syncRecurring } from './src/lib/recurring';
 import { AppLockProvider } from './src/lib/AppLock';
+import { DisplayCurrencyProvider } from './src/components/DisplayCurrency';
 import AuthScreen from './src/screens/AuthScreen';
 import AppTabs from './src/navigation/AppTabs';
 
@@ -87,9 +88,11 @@ export default function App() {
     <SafeAreaProvider>
       <AppLockProvider>
         {session ? (
-          <NavigationContainer>
-            <AppTabs />
-          </NavigationContainer>
+          <DisplayCurrencyProvider>
+            <NavigationContainer>
+              <AppTabs />
+            </NavigationContainer>
+          </DisplayCurrencyProvider>
         ) : (
           <AuthScreen />
         )}

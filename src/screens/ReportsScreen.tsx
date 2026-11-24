@@ -5,9 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
-import { CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currency';
+import { CurrencyInfo, convertToCurrency, formatMoney, loadCurrency } from '../lib/currency';
 import { Kind } from '../types';
 import AnimatedPressable from '../components/AnimatedPressable';
+import { CurrencySelector, useDisplayCurrency } from '../components/DisplayCurrency';
 
 type Row = {
   kind: Kind;
@@ -21,6 +22,7 @@ const key = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}`;
 const CHART_H = 120;
 
 export default function ReportsScreen() {
+  const { currency: displayCurrency } = useDisplayCurrency();
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [rows, setRows] = useState<Row[]>([]);
@@ -81,13 +83,13 @@ export default function ReportsScreen() {
         let expense = 0;
         for (const r of rows) {
           if (!r.occurred_on.startsWith(k)) continue;
-          const amount = convert(Number(r.amount), r.accounts?.currency, cur);
+          const amount = convertToCurrency(Number(r.amount), r.accounts?.currency, displayCurrency, cur);
           if (r.kind === 'income') income += amount;
           else expense += amount;
         }
         return { label: MONTH_NAMES[m].slice(0, 3), income, expense };
       }),
-    [rows, months, cur]
+    [rows, months, cur, displayCurrency]
   );
 
   const current = trend[trend.length - 1];
@@ -99,12 +101,12 @@ export default function ReportsScreen() {
     for (const r of rows) {
       if (r.kind !== 'expense' || !r.occurred_on.startsWith(k)) continue;
       const name = r.categories?.name ?? 'Uncategorized';
-      map[name] = (map[name] ?? 0) + convert(Number(r.amount), r.accounts?.currency, cur);
+      map[name] = (map[name] ?? 0) + convertToCurrency(Number(r.amount), r.accounts?.currency, displayCurrency, cur);
     }
     return Object.entries(map)
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total);
-  }, [rows, ym, cur]);
+  }, [rows, ym, cur, displayCurrency]);
 
   const topTotal = byCategory[0]?.total ?? 1;
 
@@ -116,10 +118,7 @@ export default function ReportsScreen() {
             <Text style={s.kicker}>MONEY OVERVIEW</Text>
             <Text style={s.title}>Reports</Text>
           </View>
-          <View style={s.currencyBadge}>
-            <Ionicons name="cash-outline" size={16} color="#5865D9" />
-            <Text style={s.currencyText}>{cur.base}</Text>
-          </View>
+          <CurrencySelector />
         </View>
 
         <View style={s.monthRow}>
@@ -150,7 +149,8 @@ export default function ReportsScreen() {
             </View>
           </View>
           <Text style={[s.netAmount, current.income - current.expense < 0 && s.negativeAmount]}>
-            {formatMoney(current.income - current.expense)}
+            {current.income - current.expense < 0 ? '-' : ''}
+            {formatMoney(current.income - current.expense, displayCurrency)}
           </Text>
           <View style={s.summaryDivider} />
           <View style={s.totals}>
@@ -160,7 +160,7 @@ export default function ReportsScreen() {
               </View>
               <View>
                 <Text style={s.totalLabel}>Income</Text>
-                <Text style={[s.totalAmount, s.incomeText]}>{formatMoney(current.income)}</Text>
+                <Text style={[s.totalAmount, s.incomeText]}>{formatMoney(current.income, displayCurrency)}</Text>
               </View>
             </View>
             <View style={s.totalBlock}>
@@ -169,7 +169,7 @@ export default function ReportsScreen() {
               </View>
               <View>
                 <Text style={s.totalLabel}>Expenses</Text>
-                <Text style={[s.totalAmount, s.expenseText]}>{formatMoney(current.expense)}</Text>
+                <Text style={[s.totalAmount, s.expenseText]}>{formatMoney(current.expense, displayCurrency)}</Text>
               </View>
             </View>
           </View>
@@ -190,8 +190,10 @@ export default function ReportsScreen() {
               return (
                 <AnimatedPressable key={`${month.y}-${month.m}`} style={[s.col, active && s.activeCol]}
                   onPress={() => setYm(month)} accessibilityRole="button"
-                  accessibilityLabel={`${MONTH_NAMES[month.m]} ${month.y}, income ${formatMoney(t.income)}, expenses ${formatMoney(t.expense)}`}>
-                  <Text style={[s.chartValue, active && s.activeChartValue]}>{formatMoney(Math.max(t.income, t.expense))}</Text>
+                  accessibilityLabel={`${MONTH_NAMES[month.m]} ${month.y}, income ${formatMoney(t.income, displayCurrency)}, expenses ${formatMoney(t.expense, displayCurrency)}`}>
+                  <Text style={[s.chartValue, active && s.activeChartValue]}>
+                    {formatMoney(Math.max(t.income, t.expense), displayCurrency)}
+                  </Text>
                   <View style={s.bars}>
                     <View style={[s.bar, { height: (t.income / maxValue) * CHART_H, backgroundColor: '#16845A' }]} />
                     <View style={[s.bar, { height: (t.expense / maxValue) * CHART_H, backgroundColor: '#D45B55' }]} />
@@ -228,7 +230,7 @@ export default function ReportsScreen() {
                     {current.expense ? Math.round((c.total / current.expense) * 100) : 0}% of expenses
                   </Text>
                 </View>
-                <Text style={s.categoryAmount}>{formatMoney(c.total)}</Text>
+                <Text style={s.categoryAmount}>{formatMoney(c.total, displayCurrency)}</Text>
               </View>
               <View style={s.barBg}>
                 <View style={[s.barFill, {

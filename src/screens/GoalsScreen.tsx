@@ -16,11 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { todayLocal } from '../lib/dates';
-import { formatMoney } from '../lib/currency';
+import { convert, convertFromBase, CurrencyInfo, formatMoney, getCurrencySymbol, loadCurrency } from '../lib/currency';
 import { Goal } from '../types';
 import AnimatedPressable from '../components/AnimatedPressable';
-import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import SwipeableDeleteRow from '../components/SwipeableDeleteRow';
+import UndoToast from '../components/UndoToast';
+import { CurrencySelector, useDisplayCurrency } from '../components/DisplayCurrency';
 
 type ModalState =
   | { mode: 'new' }
@@ -33,26 +34,29 @@ function daysLeft(deadline: string): number {
 }
 
 export default function GoalsScreen() {
+  const { currency: displayCurrency } = useDisplayCurrency();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [contribs, setContribs] = useState<{ goal_id: string; amount: number }[]>([]);
+  const [cur, setCur] = useState<CurrencyInfo>({ base: 'PHP', rates: {} });
   const [modal, setModal] = useState<ModalState>(null);
   const [name, setName] = useState('');
   const [target, setTarget] = useState('');
   const [deadline, setDeadline] = useState('');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Goal | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deletedTarget, setDeletedTarget] = useState<Goal | null>(null);
 
   const load = useCallback(async () => {
-    const [g, c] = await Promise.all([
+    const [g, c, currency] = await Promise.all([
       supabase.from('goals').select('*').is('deleted_at', null).order('created_at'),
       supabase.from('goal_contributions').select('goal_id, amount').is('deleted_at', null),
+      loadCurrency(),
     ]);
     const err = g.error || c.error;
     if (err) return Alert.alert('Load failed', err.message);
     setGoals(g.data as Goal[]);
     setContribs(c.data as { goal_id: string; amount: number }[]);
+    setCur(currency);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -76,15 +80,16 @@ export default function GoalsScreen() {
     setBusy(true);
 
     if (modal.mode === 'new') {
-      const t = Number(target.replace(',', '.'));
+      const targetInDisplay = Number(target.replace(',', '.'));
       if (!name.trim()) {
         setBusy(false);
         return Alert.alert('Enter a goal name');
       }
-      if (!t || t <= 0) {
+      if (!targetInDisplay || targetInDisplay <= 0) {
         setBusy(false);
         return Alert.alert('Enter a target amount greater than 0');
       }
+      const t = convert(targetInDisplay, displayCurrency, cur);
       if (deadline && !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
         setBusy(false);
         return Alert.alert('Invalid deadline', 'Use YYYY-MM-DD or leave it empty.');
@@ -95,15 +100,16 @@ export default function GoalsScreen() {
       setBusy(false);
       if (error) return Alert.alert('Save failed', error.message);
     } else {
-      const v = Number(amount.replace(',', '.'));
-      if (!v || v <= 0) {
+      const valueInDisplay = Number(amount.replace(',', '.'));
+      if (!valueInDisplay || valueInDisplay <= 0) {
         setBusy(false);
         return Alert.alert('Enter an amount greater than 0');
       }
+      const v = convert(valueInDisplay, displayCurrency, cur);
       const saved = savedByGoal[modal.goal.id] ?? 0;
       if (modal.mode === 'withdraw' && v > saved) {
         setBusy(false);
-        return Alert.alert('Not enough saved', `This goal only has ${formatMoney(saved)}.`);
+        return Alert.alert('Not enough saved', `This goal only has ${formatMoney(convertFromBase(saved, displayCurrency, cur), displayCurrency)}.`);
       }
       const { error } = await supabase.from('goal_contributions').insert({
         goal_id: modal.goal.id,
@@ -118,17 +124,33 @@ export default function GoalsScreen() {
     load();
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
+  async function deleteGoal(target: Goal) {
+    setGoals((current) => current.filter((item) => item.id !== target.id));
+    setDeletedTarget(target);
     const now = new Date().toISOString();
     const { error } = await supabase
       .from('goals')
       .update({ deleted_at: now, updated_at: now })
-      .eq('id', deleteTarget.id);
-    setDeleting(false);
-    if (error) return Alert.alert('Delete failed', error.message);
-    setDeleteTarget(null);
+      .eq('id', target.id);
+    if (error) {
+      setDeletedTarget(null);
+      load();
+      Alert.alert('Delete failed', error.message);
+    }
+  }
+
+  async function undoDeleteGoal() {
+    if (!deletedTarget) return;
+    const target = deletedTarget;
+    setDeletedTarget(null);
+    const { error } = await supabase
+      .from('goals')
+      .update({ deleted_at: null, updated_at: new Date().toISOString() })
+      .eq('id', target.id);
+    if (error) {
+      Alert.alert('Could not undo', error.message);
+      return;
+    }
     load();
   }
 
@@ -148,10 +170,14 @@ export default function GoalsScreen() {
 
         <View style={s.summaryCard}>
           <View>
-            <Text style={s.summaryLabel}>TOTAL SAVED</Text>
-            <Text style={s.summaryAmount}>
-              {formatMoney(goals.reduce((sum, goal) => sum + (savedByGoal[goal.id] ?? 0), 0))}
-            </Text>
+            <View style={s.summaryTopLine}>
+              <Text style={s.summaryLabel}>TOTAL SAVED</Text>
+              <CurrencySelector />
+            </View>
+            <Text style={s.summaryAmount}>{formatMoney(
+              convertFromBase(goals.reduce((sum, goal) => sum + (savedByGoal[goal.id] ?? 0), 0), displayCurrency, cur),
+              displayCurrency,
+            )}</Text>
           </View>
           <View style={s.summaryGoalCount}>
             <Ionicons name="flag-outline" size={16} color="#5865D9" />
@@ -188,7 +214,7 @@ export default function GoalsScreen() {
             const done = saved >= target;
             const left = item.deadline ? daysLeft(item.deadline) : null;
             return (
-              <SwipeableDeleteRow onDelete={() => setDeleteTarget(item)} label="Delete" disabled={deleting}>
+              <SwipeableDeleteRow onDelete={() => deleteGoal(item)} label="Delete">
                 <View style={s.goalCard}>
                   <View style={s.goalTop}>
                     <View style={[s.goalIcon, done && s.goalIconDone]}>
@@ -206,8 +232,8 @@ export default function GoalsScreen() {
                       </Text>
                     </View>
                     <View style={s.goalAmount}>
-                      <Text style={s.savedAmount}>{formatMoney(saved)}</Text>
-                      <Text style={s.targetAmount}>of {formatMoney(target)}</Text>
+                      <Text style={s.savedAmount}>{formatMoney(convertFromBase(saved, displayCurrency, cur), displayCurrency)}</Text>
+                      <Text style={s.targetAmount}>of {formatMoney(convertFromBase(target, displayCurrency, cur), displayCurrency)}</Text>
                     </View>
                   </View>
                   <View style={s.progressTrack}>
@@ -216,7 +242,7 @@ export default function GoalsScreen() {
                   <View style={s.goalFooter}>
                     <Text style={s.percentText}>{Math.round(pct)}%</Text>
                     <Text style={s.remainingText}>
-                      {done ? 'Completed' : `${formatMoney(target - saved)} to go`}
+                      {done ? 'Completed' : `${formatMoney(convertFromBase(target - saved, displayCurrency, cur), displayCurrency)} to go`}
                     </Text>
                   </View>
                   <View style={s.actions}>
@@ -254,7 +280,7 @@ export default function GoalsScreen() {
                 </View>
                 <Text style={s.inputLabel}>Target amount</Text>
                 <View style={s.inputShell}>
-                  <Text style={s.inputCurrency}>PHP</Text>
+                  <Text style={s.inputCurrency}>{getCurrencySymbol(displayCurrency)} {displayCurrency}</Text>
                   <TextInput style={s.input} placeholder="0.00" keyboardType="decimal-pad" value={target} onChangeText={setTarget} />
                 </View>
                 <Text style={s.inputLabel}>Deadline <Text style={s.optional}>(optional)</Text></Text>
@@ -269,7 +295,7 @@ export default function GoalsScreen() {
                 <Text style={s.editTitle}>{modal?.mode === 'withdraw' ? 'Withdraw from' : 'Add to'} {modal?.goal.name}</Text>
                 <Text style={s.inputLabel}>Amount</Text>
                 <View style={s.inputShell}>
-                  <Text style={s.inputCurrency}>PHP</Text>
+                  <Text style={s.inputCurrency}>{getCurrencySymbol(displayCurrency)} {displayCurrency}</Text>
                   <TextInput style={s.input} placeholder="0.00" keyboardType="decimal-pad" autoFocus
                     value={amount} onChangeText={setAmount} />
                 </View>
@@ -286,14 +312,11 @@ export default function GoalsScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <DeleteConfirmModal
-        visible={deleteTarget !== null}
-        title="Delete savings goal?"
-        detail={deleteTarget?.name ?? ''}
-        description="The goal and its saved contribution history will be hidden."
-        busy={deleting}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
+      <UndoToast
+        visible={deletedTarget !== null}
+        message={deletedTarget ? `${deletedTarget.name} deleted` : 'Goal deleted'}
+        onUndo={undoDeleteGoal}
+        onDismiss={() => setDeletedTarget(null)}
       />
     </SafeAreaView>
   );
@@ -307,6 +330,7 @@ const s = StyleSheet.create({
   title: { color: '#20263B', fontSize: 30, fontWeight: '800', letterSpacing: -0.5 },
   headerButton: { alignItems: 'center', backgroundColor: '#5865D9', borderRadius: 15, height: 46, justifyContent: 'center', width: 46 },
   summaryCard: { alignItems: 'center', backgroundColor: '#29304A', borderRadius: 22, flexDirection: 'row', justifyContent: 'space-between', padding: 18 },
+  summaryTopLine: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   summaryLabel: { color: '#AEB6D4', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   summaryAmount: { color: '#FFFFFF', fontSize: 28, fontWeight: '800', marginTop: 4 },
   summaryGoalCount: { alignItems: 'center', backgroundColor: '#EEF0FF', borderRadius: 12, flexDirection: 'row', paddingHorizontal: 9, paddingVertical: 8 },

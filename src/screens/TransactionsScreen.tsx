@@ -5,15 +5,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { ensureDefaultCategories } from '../lib/categories';
-import { CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currency';
+import { CurrencyInfo, convertToCurrency, formatMoney, loadCurrency } from '../lib/currency';
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
 import AddTransactionModal from '../components/AddTransactionsModal';
 import AnimatedPressable from '../components/AnimatedPressable';
-import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import SwipeableDeleteRow from '../components/SwipeableDeleteRow';
+import UndoToast from '../components/UndoToast';
+import { CurrencySelector, useDisplayCurrency } from '../components/DisplayCurrency';
 import { Account, Category, Transaction } from '../types';
 
 export default function TransactionsScreen() {
+  const { currency: displayCurrency } = useDisplayCurrency();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -21,8 +23,7 @@ export default function TransactionsScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
-  const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deletedTarget, setDeletedTarget] = useState<Transaction | null>(null);
   const introProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -67,12 +68,12 @@ export default function TransactionsScreen() {
     let income = 0;
     let expense = 0;
     for (const t of transactions) {
-      const v = convert(Number(t.amount), t.accounts?.currency, cur);
+      const v = convertToCurrency(Number(t.amount), t.accounts?.currency, displayCurrency, cur);
       if (t.kind === 'income') income += v;
       else expense += v;
     }
     return { income, expense, net: income - expense };
-  }, [transactions, cur]);
+  }, [transactions, cur, displayCurrency]);
 
   function openAdd() {
     if (accounts.length === 0) {
@@ -86,17 +87,33 @@ export default function TransactionsScreen() {
     setShowMonthPicker(true);
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
+  async function deleteTransaction(target: Transaction) {
+    setTransactions((current) => current.filter((item) => item.id !== target.id));
+    setDeletedTarget(target);
     const now = new Date().toISOString();
     const { error } = await supabase
       .from('transactions')
       .update({ deleted_at: now, updated_at: now })
-      .eq('id', deleteTarget.id);
-    setDeleting(false);
-    if (error) return Alert.alert('Delete failed', error.message);
-    setDeleteTarget(null);
+      .eq('id', target.id);
+    if (error) {
+      setDeletedTarget(null);
+      load();
+      Alert.alert('Delete failed', error.message);
+    }
+  }
+
+  async function undoDeleteTransaction() {
+    if (!deletedTarget) return;
+    const target = deletedTarget;
+    setDeletedTarget(null);
+    const { error } = await supabase
+      .from('transactions')
+      .update({ deleted_at: null, updated_at: new Date().toISOString() })
+      .eq('id', target.id);
+    if (error) {
+      Alert.alert('Could not undo', error.message);
+      return;
+    }
     load();
   }
 
@@ -121,10 +138,10 @@ export default function TransactionsScreen() {
         }]}>
           <View style={s.summaryHeading}>
             <Text style={s.summaryLabel}>NET THIS PERIOD</Text>
-            <Text style={s.currency}>In {cur.base}</Text>
+            <CurrencySelector />
           </View>
           <Text style={[s.netAmount, totals.net < 0 && s.negativeAmount]}>
-            {totals.net < 0 ? '-' : ''}{formatMoney(totals.net)}
+            {totals.net < 0 ? '-' : ''}{formatMoney(totals.net, displayCurrency)}
           </Text>
           <View style={s.summaryDivider} />
           <View style={s.totals}>
@@ -134,7 +151,7 @@ export default function TransactionsScreen() {
               </View>
               <View>
                 <Text style={s.sub}>Income</Text>
-                <Text style={[s.num, s.incomeText]}>{formatMoney(totals.income)}</Text>
+                <Text style={[s.num, s.incomeText]}>{formatMoney(totals.income, displayCurrency)}</Text>
               </View>
             </View>
             <View style={s.totalBlock}>
@@ -143,7 +160,7 @@ export default function TransactionsScreen() {
               </View>
               <View>
                 <Text style={s.sub}>Expenses</Text>
-                <Text style={[s.num, s.expenseText]}>{formatMoney(totals.expense)}</Text>
+                <Text style={[s.num, s.expenseText]}>{formatMoney(totals.expense, displayCurrency)}</Text>
               </View>
             </View>
           </View>
@@ -194,8 +211,7 @@ export default function TransactionsScreen() {
           renderItem={({ item }) => {
             const isIncome = item.kind === 'income';
             return (
-              <SwipeableDeleteRow onDelete={() => setDeleteTarget(item)}
-                label="Delete" disabled={deleting}>
+              <SwipeableDeleteRow onDelete={() => deleteTransaction(item)} label="Delete">
                 <Pressable accessibilityRole="button"
                   accessibilityLabel={`${item.categories?.name ?? 'Uncategorized'}, ${isIncome ? 'income' : 'expense'}`}>
                   <View style={s.item}>
@@ -212,9 +228,12 @@ export default function TransactionsScreen() {
                   </View>
                   <View style={s.amountBlock}>
                     <Text style={[s.amount, isIncome ? s.incomeText : s.expenseText]}>
-                      {isIncome ? '+' : '-'}{formatMoney(Number(item.amount))}
+                      {isIncome ? '+' : '-'}{formatMoney(
+                        convertToCurrency(Number(item.amount), item.accounts?.currency, displayCurrency, cur),
+                        displayCurrency,
+                      )}
                     </Text>
-                    <Text style={s.currencyCode}>{item.accounts?.currency}</Text>
+                    <Text style={s.currencyCode}>{displayCurrency}</Text>
                   </View>
                   </View>
                 </Pressable>
@@ -242,15 +261,13 @@ export default function TransactionsScreen() {
         onSaved={load}
       />
 
-      <DeleteConfirmModal
-        visible={deleteTarget !== null}
-        title="Delete transaction?"
-        detail={deleteTarget
-          ? `${deleteTarget.categories?.name ?? 'Uncategorized'} · ${formatMoney(Number(deleteTarget.amount))} ${deleteTarget.accounts?.currency ?? cur.base}`
-          : ''}
-        busy={deleting}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
+      <UndoToast
+        visible={deletedTarget !== null}
+        message={deletedTarget
+          ? `${deletedTarget.categories?.name ?? 'Transaction'} deleted`
+          : 'Transaction deleted'}
+        onUndo={undoDeleteTransaction}
+        onDismiss={() => setDeletedTarget(null)}
       />
 
       <Modal

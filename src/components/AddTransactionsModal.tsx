@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { supabase } from '../lib/supabase';
 import { todayLocal } from '../lib/dates';
+import { getCurrencySymbol } from '../lib/currency';
 import { Account, Category, Kind } from '../types';
 import AnimatedPressable from './AnimatedPressable';
 
@@ -160,7 +161,10 @@ export default function AddTransactionModal({ visible, accounts, categories, onC
 
               <Text style={s.label}>Amount</Text>
               <View style={s.amountShell}>
-                <Text style={s.amountCurrency}>{accounts.find((a) => a.id === accountId)?.currency ?? 'PHP'}</Text>
+                <Text style={s.amountCurrency}>
+                  {getCurrencySymbol(accounts.find((a) => a.id === accountId)?.currency ?? 'PHP')}
+                  {' '}{accounts.find((a) => a.id === accountId)?.currency ?? 'PHP'}
+                </Text>
                 <TextInput
                   style={s.amountInput}
                   placeholder="0.00"

@@ -1,19 +1,24 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, Button, Alert, FlatList, Pressable, Modal, TextInput, ScrollView, Switch, StyleSheet } from 'react-native';
+import { View, Text, Alert, Button, FlatList, Pressable, Modal, TextInput, ScrollView, Switch, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { ensureDefaultCategories } from '../lib/categories';
 import { nextOccurrence, todayLocal } from '../lib/dates';
 import { syncRecurring } from '../lib/recurring';
-import { formatMoney } from '../lib/currency';
+import { CurrencyInfo, convertToCurrency, formatMoney, getCurrencySymbol, loadCurrency } from '../lib/currency';
 import Chip from '../components/Chip';
 import { Account, Category, Kind, RecurringRule } from '../types';
+import AnimatedPressable from '../components/AnimatedPressable';
+import { CurrencySelector, useDisplayCurrency } from '../components/DisplayCurrency';
 
 export default function RecurringScreen() {
+  const { currency: displayCurrency } = useDisplayCurrency();
   const [rules, setRules] = useState<RecurringRule[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [cur, setCur] = useState<CurrencyInfo>({ base: 'PHP', rates: {} });
   const [show, setShow] = useState(false);
 
   const [name, setName] = useState('');
@@ -26,7 +31,7 @@ export default function RecurringScreen() {
 
   const load = useCallback(async () => {
     await ensureDefaultCategories();
-    const [r, a, c] = await Promise.all([
+    const [r, a, c, currency] = await Promise.all([
       supabase
         .from('recurring_rules')
         .select('*, categories(name), accounts(name, currency)')
@@ -34,12 +39,14 @@ export default function RecurringScreen() {
         .order('next_due'),
       supabase.from('accounts').select('*').is('deleted_at', null).order('created_at'),
       supabase.from('categories').select('*').is('deleted_at', null).order('name'),
+      loadCurrency(),
     ]);
     const err = r.error || a.error || c.error;
     if (err) return Alert.alert('Load failed', err.message);
     setRules(r.data as unknown as RecurringRule[]);
     setAccounts(a.data as Account[]);
     setCategories(c.data as Category[]);
+    setCur(currency);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -138,7 +145,19 @@ export default function RecurringScreen() {
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <View style={s.box}>
-        <Button title="+ New recurring item" onPress={openNew} />
+        <View style={s.header}>
+          <View>
+            <Text style={s.kicker}>BILLS & INCOME</Text>
+            <Text style={s.title}>Recurring</Text>
+          </View>
+          <View style={s.headerActions}>
+            <CurrencySelector />
+            <AnimatedPressable onPress={openNew} style={s.headerButton} accessibilityRole="button"
+              accessibilityLabel="Add recurring item">
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </AnimatedPressable>
+          </View>
+        </View>
         <FlatList
           style={{ marginTop: 12 }}
           data={rules}
@@ -149,7 +168,10 @@ export default function RecurringScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.itemTitle}>{item.name}</Text>
                 <Text style={s.sub}>
-                  {item.kind === 'income' ? '+' : '-'}{formatMoney(Number(item.amount))} {item.accounts?.currency} · {item.frequency}
+                  {item.kind === 'income' ? '+' : '-'}{formatMoney(
+                    convertToCurrency(Number(item.amount), item.accounts?.currency, displayCurrency, cur),
+                    displayCurrency,
+                  )} · {item.frequency}
                 </Text>
                 <Text style={s.sub}>
                   {item.active ? `Next: ${item.next_due}` : 'Paused'}
@@ -172,6 +194,10 @@ export default function RecurringScreen() {
             </View>
 
             <TextInput style={s.input} placeholder="Name (e.g. Rent, Netflix)" value={name} onChangeText={setName} />
+            <Text style={s.label}>
+              Amount in {getCurrencySymbol(accounts.find((account) => account.id === accountId)?.currency ?? displayCurrency)}{' '}
+              {accounts.find((account) => account.id === accountId)?.currency ?? displayCurrency}
+            </Text>
             <TextInput style={s.input} placeholder="Amount" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
 
             <Text style={s.label}>Repeats</Text>
@@ -210,7 +236,11 @@ export default function RecurringScreen() {
 
 const s = StyleSheet.create({
   box: { flex: 1, padding: 20 },
-  title: { fontSize: 22, fontWeight: '600', marginBottom: 16 },
+  header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  headerActions: { alignItems: 'center', flexDirection: 'row', gap: 8 },
+  headerButton: { alignItems: 'center', backgroundColor: '#5865D9', borderRadius: 13, height: 42, justifyContent: 'center', width: 42 },
+  kicker: { color: '#5865D9', fontSize: 10, fontWeight: '800', letterSpacing: 1.1, marginBottom: 4 },
+  title: { color: '#20263B', fontSize: 24, fontWeight: '800', marginBottom: 16 },
   label: { fontWeight: '600', marginTop: 8, marginBottom: 6 },
   sub: { color: '#666', fontSize: 13 },
   row: { flexDirection: 'row', gap: 8, marginBottom: 12 },

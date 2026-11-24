@@ -16,10 +16,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { ensureDefaultCategories } from '../lib/categories';
-import { CurrencyInfo, convert, formatMoney, loadCurrency } from '../lib/currency';
+import { CurrencyInfo, convert, convertFromBase, formatMoney, getCurrencySymbol, loadCurrency } from '../lib/currency';
 import { MONTH_NAMES, monthStart, nextMonth, prevMonth } from '../lib/dates';
 import { Budget, Category } from '../types';
 import AnimatedPressable from '../components/AnimatedPressable';
+import { CurrencySelector, useDisplayCurrency } from '../components/DisplayCurrency';
 
 type SpentRow = {
   category_id: string | null;
@@ -28,6 +29,7 @@ type SpentRow = {
 };
 
 export default function BudgetsScreen() {
+  const { currency: displayCurrency } = useDisplayCurrency();
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [categories, setCategories] = useState<Category[]>([]);
@@ -105,13 +107,16 @@ export default function BudgetsScreen() {
 
   function openEdit(c: Category) {
     setEditing(c);
-    setText(budgetByCat[c.id] ? String(budgetByCat[c.id]) : '');
+    setText(budgetByCat[c.id]
+      ? String(convertFromBase(budgetByCat[c.id], displayCurrency, cur))
+      : '');
   }
 
   async function saveBudget() {
     if (!editing) return;
-    const value = Number(text.replace(',', '.') || '0');
-    if (isNaN(value) || value < 0) return Alert.alert('Invalid amount');
+    const enteredValue = Number(text.replace(',', '.') || '0');
+    if (isNaN(enteredValue) || enteredValue < 0) return Alert.alert('Invalid amount');
+    const value = convert(enteredValue, displayCurrency, cur);
     const month = monthStart(ym.y, ym.m);
 
     const { error } =
@@ -134,6 +139,7 @@ export default function BudgetsScreen() {
             <Text style={s.kicker}>MONTHLY PLANNING</Text>
             <Text style={s.title}>Budgets</Text>
           </View>
+          <CurrencySelector />
         </View>
 
         <View style={s.monthRow}>
@@ -156,7 +162,9 @@ export default function BudgetsScreen() {
           <View style={s.summaryTop}>
             <View>
               <Text style={s.summaryLabel}>TOTAL SPENT</Text>
-              <Text style={s.summaryAmount}>{formatMoney(totalSpent)}</Text>
+              <Text style={s.summaryAmount}>
+                {formatMoney(convertFromBase(totalSpent, displayCurrency, cur), displayCurrency)}
+              </Text>
             </View>
             <View style={s.summaryBadge}>
               <Ionicons name={remaining >= 0 ? 'trending-down-outline' : 'alert-circle-outline'} size={16}
@@ -170,12 +178,16 @@ export default function BudgetsScreen() {
           <View style={s.summaryStats}>
             <View style={s.summaryStat}>
               <Text style={s.summaryStatLabel}>BUDGETED</Text>
-              <Text style={s.summaryStatValue}>{formatMoney(totalBudget)} <Text style={s.summaryCurrency}>{cur.base}</Text></Text>
+              <Text style={s.summaryStatValue}>
+                {formatMoney(convertFromBase(totalBudget, displayCurrency, cur), displayCurrency)}
+              </Text>
             </View>
             <View style={s.summaryStatDivider} />
             <View style={s.summaryStat}>
               <Text style={s.summaryStatLabel}>{remaining >= 0 ? 'REMAINING' : 'OVER BUDGET'}</Text>
-              <Text style={[s.summaryStatValue, remaining < 0 && s.summaryOver]}>{formatMoney(remaining)}</Text>
+              <Text style={[s.summaryStatValue, remaining < 0 && s.summaryOver]}>
+                {formatMoney(convertFromBase(remaining, displayCurrency, cur), displayCurrency)}
+              </Text>
             </View>
           </View>
         </View>
@@ -209,14 +221,18 @@ export default function BudgetsScreen() {
                     <Text style={s.categoryStatus}>
                       {limit
                         ? state === 'danger'
-                          ? `Over by ${formatMoney(spent - limit)} ${cur.base}`
-                          : `${formatMoney(limit - spent)} ${cur.base} left`
+                          ? `Over by ${formatMoney(convertFromBase(spent - limit, displayCurrency, cur), displayCurrency)}`
+                          : `${formatMoney(convertFromBase(limit - spent, displayCurrency, cur), displayCurrency)} left`
                         : 'Tap to set a monthly limit'}
                     </Text>
                   </View>
                   <View style={s.categoryAmount}>
-                    <Text style={s.categorySpent}>{formatMoney(spent)}</Text>
-                    <Text style={s.categoryLimit}>{limit ? `of ${formatMoney(limit)}` : 'No budget'}</Text>
+                    <Text style={s.categorySpent}>
+                      {formatMoney(convertFromBase(spent, displayCurrency, cur), displayCurrency)}
+                    </Text>
+                    <Text style={s.categoryLimit}>{limit
+                      ? `of ${formatMoney(convertFromBase(limit, displayCurrency, cur), displayCurrency)}`
+                      : 'No budget'}</Text>
                   </View>
                 </View>
                 {limit ? (
@@ -252,10 +268,10 @@ export default function BudgetsScreen() {
                 <Ionicons name="close" size={20} color="#697187" />
               </AnimatedPressable>
             </View>
-            <Text style={s.editHelp}>Set a monthly limit in {cur.base}. Enter 0 to remove it.</Text>
+            <Text style={s.editHelp}>Set a monthly limit in {displayCurrency}. Enter 0 to remove it.</Text>
             <Text style={s.inputLabel}>Monthly limit</Text>
             <View style={s.inputShell}>
-              <Text style={s.inputCurrency}>{cur.base}</Text>
+              <Text style={s.inputCurrency}>{getCurrencySymbol(displayCurrency)} {displayCurrency}</Text>
               <TextInput style={s.input} keyboardType="decimal-pad" value={text}
                 onChangeText={setText} placeholder="0.00" placeholderTextColor="#AEB6C5" autoFocus />
             </View>
@@ -314,7 +330,7 @@ export default function BudgetsScreen() {
 const s = StyleSheet.create({
   safeArea: { backgroundColor: '#F6F7FB', flex: 1 },
   box: { flex: 1, paddingHorizontal: 20 },
-  header: { paddingBottom: 14, paddingTop: 18 },
+  header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 14, paddingTop: 18 },
   kicker: { color: '#5865D9', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 5 },
   title: { color: '#20263B', fontSize: 30, fontWeight: '800', letterSpacing: -0.5 },
   monthRow: { alignItems: 'center', backgroundColor: '#FFFFFF', borderColor: '#E8EAF1', borderRadius: 16, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, padding: 8 },
