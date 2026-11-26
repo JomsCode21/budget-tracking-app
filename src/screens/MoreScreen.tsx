@@ -110,6 +110,13 @@ export default function MoreScreen() {
             onPress={() => nav.navigate('Currency')} last />
         </View>
 
+        <Text style={s.sectionTitle}>Work tools</Text>
+        <View style={s.menuCard}>
+          <MenuRow icon="time-outline" iconColor="#5865D9" iconBackground="#EEF0FF"
+            title="DTR" subtitle="Attendance, work hours and pay summary"
+            onPress={() => nav.navigate('DTR')} last />
+        </View>
+
         <Text style={s.sectionTitle}>Security</Text>
         <View style={s.menuCard}>
           <View style={s.securityRow}>

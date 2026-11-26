@@ -10,6 +10,7 @@ import AccountsScreen from '../screens/AccountsScreen';
 import RecurringScreen from '../screens/RecurringScreen';
 import MoreScreen from '../screens/MoreScreen';
 import CurrencyScreen from '../screens/CurrencyScreen';
+import DtrScreen from '../screens/DtrScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -21,6 +22,7 @@ function MoreStack() {
       <Stack.Screen name="Accounts" component={AccountsScreen} />
       <Stack.Screen name="Recurring" component={RecurringScreen} options={{ title: 'Recurring' }} />
       <Stack.Screen name="Currency" component={CurrencyScreen} options={{ title: 'Currency' }} />
+      <Stack.Screen name="DTR" component={DtrScreen} options={{ title: 'DTR' }} />
     </Stack.Navigator>
   );
 }
