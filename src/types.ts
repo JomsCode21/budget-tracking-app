@@ -54,3 +54,27 @@ export type RecurringRule = {
   categories?: { name: string } | null;
   accounts?: { name: string; currency: string } | null;
 };
+
+export type DtrSettings = {
+  user_id: string;
+  daily_rate: number;
+  overtime_rate: number;
+  standard_start: string | null;
+  standard_end: string | null;
+  overtime_end: string | null;
+  scheduled_break_start: string | null;
+  scheduled_break_end: string | null;
+  scheduled_break_minutes: number;
+  grace_period_minutes: number;
+};
+
+export type DtrEntry = {
+  id: string;
+  work_date: string;
+  clock_in_at: string;
+  clock_out_at: string | null;
+  break_started_at: string | null;
+  break_minutes: number;
+  overtime_minutes: number | null;
+  note: string | null;
+};

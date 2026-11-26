@@ -2,6 +2,14 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { supabase } from './supabase';
 import { todayLocal } from './dates';
+import {
+  creditedOvertimeMinutes,
+  lateMinutes,
+  localTime,
+  regularWorkMinutes,
+  undertimeMinutes,
+} from './dtr';
+import { DtrEntry, DtrSettings } from '../types';
 
 // Supabase returns at most 1000 rows per request, so read in pages.
 async function fetchAll(table: string, select = '*', orderBy = 'id'): Promise<any[]> {
@@ -117,6 +125,46 @@ export async function exportTransactionsCsv() {
   return active.length;
 }
 
+export async function exportDtrCsv(
+  entries: DtrEntry[],
+  settings: DtrSettings,
+  currency: string,
+  periodStart: string,
+): Promise<number> {
+  const header = [
+    'Date', 'Clock In', 'Clock Out', 'Break Minutes', 'Regular Hours',
+    'Late Minutes', 'Undertime Minutes', 'Overtime Hours', 'Daily Pay',
+    'Overtime Pay', 'Total Pay', 'Currency', 'Note',
+  ];
+  const lines = [header.join(',')];
+  for (const entry of entries) {
+    const completed = Boolean(entry.clock_out_at);
+    const workMinutes = completed ? regularWorkMinutes(entry, settings) : 0;
+    const late = completed ? lateMinutes(entry, settings) : 0;
+    const undertime = completed ? undertimeMinutes(entry, settings) : 0;
+    const overtime = completed ? creditedOvertimeMinutes(entry, settings) : 0;
+    const dailyPay = completed ? Number(settings.daily_rate) : 0;
+    const overtimePay = (overtime / 60) * Number(settings.overtime_rate);
+    lines.push([
+      csvText(entry.work_date),
+      csvText(localTime(entry.clock_in_at)),
+      csvText(localTime(entry.clock_out_at)),
+      String(entry.break_minutes),
+      (workMinutes / 60).toFixed(2),
+      String(late),
+      String(undertime),
+      (overtime / 60).toFixed(2),
+      dailyPay.toFixed(2),
+      overtimePay.toFixed(2),
+      (dailyPay + overtimePay).toFixed(2),
+      csvText(currency),
+      csvText(entry.note),
+    ].join(','));
+  }
+  await shareFile(`dtr-${periodStart}.csv`, '\uFEFF' + lines.join('\n'), 'text/csv');
+  return entries.length;
+}
+
 export async function exportBackupJson() {
   const tables: Record<string, any[]> = {
     accounts: await fetchAll('accounts'),
@@ -128,6 +176,8 @@ export async function exportBackupJson() {
     goal_contributions: await fetchAll('goal_contributions'),
     user_settings: await fetchAll('user_settings', '*', 'user_id'),
     exchange_rates: await fetchAll('exchange_rates'),
+    dtr_settings: await fetchAll('dtr_settings', '*', 'user_id'),
+    dtr_entries: await fetchAll('dtr_entries'),
   };
   const backup = { app: 'budget-tracker', version: 1, exported_at: new Date().toISOString(), tables };
   await shareFile(

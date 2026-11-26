@@ -12,6 +12,8 @@ const PLAN: { table: string; conflict: string; dropId?: boolean }[] = [
   { table: 'goal_contributions', conflict: 'id' },
   { table: 'user_settings', conflict: 'user_id' },
   { table: 'exchange_rates', conflict: 'user_id,currency', dropId: true },
+  { table: 'dtr_settings', conflict: 'user_id', dropId: true },
+  { table: 'dtr_entries', conflict: 'id' },
 ];
 
 const CHUNK = 200;
@@ -64,6 +66,18 @@ function requireNullableNumber(row: RecordValue, field: string, table: string, i
 function requireDate(row: RecordValue, field: string, table: string, index: number, nullable = false) {
   if (nullable && row[field] === null) return;
   if (!isDate(row[field])) {
+    throw new Error(`${table}[${index}] has an invalid ${field}.`);
+  }
+}
+
+function requireNullableTime(row: RecordValue, field: string, table: string, index: number) {
+  if (row[field] !== null && (typeof row[field] !== 'string' || !/^\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(row[field] as string))) {
+    throw new Error(`${table}[${index}] has an invalid ${field}.`);
+  }
+}
+
+function requireNullableTimestamp(row: RecordValue, field: string, table: string, index: number) {
+  if (row[field] !== null && (typeof row[field] !== 'string' || !Number.isFinite(Date.parse(row[field] as string)))) {
     throw new Error(`${table}[${index}] has an invalid ${field}.`);
   }
 }
@@ -143,6 +157,40 @@ function validateAndSanitize(table: string, rows: unknown[]): RecordValue[] {
         requireNumber(value, 'rate', table, index);
         if (Number(value.rate) <= 0) throw new Error(`${table}[${index}] has a rate that is not positive.`);
         return pick(value, ['currency', 'rate', 'created_at', 'updated_at']);
+      case 'dtr_settings':
+        requireNumber(value, 'daily_rate', table, index);
+        requireNumber(value, 'overtime_rate', table, index);
+        if (Number(value.daily_rate) < 0 || Number(value.overtime_rate) < 0) {
+          throw new Error(`${table}[${index}] has a negative rate.`);
+        }
+        requireNullableTime(value, 'standard_start', table, index);
+        requireNullableTime(value, 'standard_end', table, index);
+        if (value.overtime_end !== undefined) requireNullableTime(value, 'overtime_end', table, index);
+        if (value.scheduled_break_start !== undefined) requireNullableTime(value, 'scheduled_break_start', table, index);
+        if (value.scheduled_break_end !== undefined) requireNullableTime(value, 'scheduled_break_end', table, index);
+        requireNumber(value, 'scheduled_break_minutes', table, index);
+        requireNumber(value, 'grace_period_minutes', table, index);
+        return pick(value, ['daily_rate', 'overtime_rate', 'standard_start', 'standard_end', 'overtime_end', 'scheduled_break_start', 'scheduled_break_end', 'scheduled_break_minutes', 'grace_period_minutes', 'created_at', 'updated_at']);
+      case 'dtr_entries':
+        requireString(value, 'id', table, index);
+        requireDate(value, 'work_date', table, index);
+        requireString(value, 'clock_in_at', table, index);
+        if (!Number.isFinite(Date.parse(value.clock_in_at as string))) throw new Error(`${table}[${index}] has an invalid clock_in_at.`);
+        requireNullableTimestamp(value, 'clock_out_at', table, index);
+        requireNullableTimestamp(value, 'break_started_at', table, index);
+        requireNumber(value, 'break_minutes', table, index);
+        if (!Number.isInteger(Number(value.break_minutes)) || Number(value.break_minutes) < 0) {
+          throw new Error(`${table}[${index}] has an invalid break_minutes.`);
+        }
+        if (value.overtime_minutes !== undefined) {
+          requireNullableNumber(value, 'overtime_minutes', table, index);
+          if (value.overtime_minutes !== null &&
+            (!Number.isInteger(Number(value.overtime_minutes)) || Number(value.overtime_minutes) < 0)) {
+            throw new Error(`${table}[${index}] has an invalid overtime_minutes.`);
+          }
+        }
+        requireNullableString(value, 'note', table, index);
+        return pick(value, ['id', 'work_date', 'clock_in_at', 'clock_out_at', 'break_started_at', 'break_minutes', 'overtime_minutes', 'note', 'created_at', 'updated_at']);
       default:
         throw new Error(`Unsupported backup table: ${table}.`);
     }
