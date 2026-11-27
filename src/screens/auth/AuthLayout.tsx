@@ -133,6 +133,25 @@ export function PrimaryButton({ label, onPress, busy }: { label: string; onPress
   );
 }
 
+export function GoogleButton({ onPress, busy }: { onPress: () => void; busy: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={busy}
+      style={({ pressed }) => [s.googleButton, pressed && s.pressed, busy && s.disabledButton]}
+      accessibilityRole="button"
+      accessibilityLabel="Continue with Google"
+    >
+      {busy ? <ActivityIndicator color="#4285F4" /> : (
+        <>
+          <Ionicons name="logo-google" size={18} color="#4285F4" />
+          <Text style={s.googleButtonText}>Continue with Google</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 export function LinkText({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={s.linkButton} accessibilityRole="button">
@@ -171,6 +190,8 @@ const s = StyleSheet.create({
   primaryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   secondaryButton: { alignItems: 'center', borderColor: '#DDE1EC', borderRadius: 13, borderWidth: 1, justifyContent: 'center', minHeight: 50 },
   secondaryButtonText: { color: '#5865D9', fontSize: 15, fontWeight: '800' },
+  googleButton: { alignItems: 'center', borderColor: '#DDE1EC', borderRadius: 13, borderWidth: 1, flexDirection: 'row', gap: 10, justifyContent: 'center', minHeight: 50 },
+  googleButtonText: { color: '#343B53', fontSize: 15, fontWeight: '700' },
   pressed: { opacity: 0.78 },
   disabledButton: { opacity: 0.65 },
   linkButton: { alignItems: 'center', paddingVertical: 15 },

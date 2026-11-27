@@ -1,6 +1,6 @@
 import React from 'react';
-import { TextInput } from 'react-native';
-import { AuthField, AuthLayout, LinkText, PasswordField, PrimaryButton, authStyles as s } from './AuthLayout';
+import { Text, TextInput, View } from 'react-native';
+import { AuthField, AuthLayout, GoogleButton, LinkText, PasswordField, PrimaryButton, authStyles as s } from './AuthLayout';
 
 type Props = {
   email: string;
@@ -8,17 +8,20 @@ type Props = {
   confirmPassword: string;
   busy: boolean;
   showPassword: boolean;
+  showConfirmPassword: boolean;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onConfirmPasswordChange: (value: string) => void;
   onTogglePassword: () => void;
+  onToggleConfirmPassword: () => void;
+  onGoogleSignIn: () => void;
   onCreateAccount: () => void;
   onBackToLogin: () => void;
 };
 
 export default function SignupScreen({
-  email, password, confirmPassword, busy, showPassword, onEmailChange, onPasswordChange,
-  onConfirmPasswordChange, onTogglePassword, onCreateAccount, onBackToLogin,
+  email, password, confirmPassword, busy, showPassword, showConfirmPassword, onEmailChange, onPasswordChange,
+  onConfirmPasswordChange, onTogglePassword, onToggleConfirmPassword, onGoogleSignIn, onCreateAccount, onBackToLogin,
 }: Props) {
   return (
     <AuthLayout eyebrow="CREATE YOUR ACCOUNT" title={'A better habit\nstarts here.'}
@@ -31,8 +34,15 @@ export default function SignupScreen({
       <PasswordField value={password} onChangeText={onPasswordChange} placeholder="At least 8 characters"
         showPassword={showPassword} onToggleVisibility={onTogglePassword} />
       <PasswordField label="Confirm password" value={confirmPassword} onChangeText={onConfirmPasswordChange}
-        placeholder="Re-enter your password" showPassword={showPassword} onToggleVisibility={onTogglePassword} />
+        placeholder="Re-enter your password" showPassword={showConfirmPassword}
+        onToggleVisibility={onToggleConfirmPassword} />
       <PrimaryButton label="Create account" onPress={onCreateAccount} busy={busy} />
+      <View style={s.dividerRow}>
+        <View style={s.divider} />
+        <Text style={s.dividerText}>OR</Text>
+        <View style={s.divider} />
+      </View>
+      <GoogleButton onPress={onGoogleSignIn} busy={busy} />
       <LinkText label="Already have an account? Log in" onPress={onBackToLogin} />
     </AuthLayout>
   );

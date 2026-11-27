@@ -3,6 +3,7 @@
     "name": "budget-tracker",
     "slug": "budget-tracker",
     "version": "1.0.0",
+    "scheme": "budgettracker",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -27,7 +28,8 @@
       "expo-sharing",
       "expo-secure-store",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

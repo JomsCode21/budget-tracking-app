@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { AuthField, AuthLayout, LinkText, PasswordField, PrimaryButton, authStyles as s } from './AuthLayout';
+import { AuthField, AuthLayout, GoogleButton, LinkText, PasswordField, PrimaryButton, authStyles as s } from './AuthLayout';
 
 type Props = {
   email: string;
@@ -11,13 +11,14 @@ type Props = {
   onPasswordChange: (value: string) => void;
   onTogglePassword: () => void;
   onLogin: () => void;
+  onGoogleSignIn: () => void;
   onCreateAccount: () => void;
   onForgotPassword: () => void;
 };
 
 export default function LoginScreen({
   email, password, busy, showPassword, onEmailChange, onPasswordChange, onTogglePassword,
-  onLogin, onCreateAccount, onForgotPassword,
+  onLogin, onGoogleSignIn, onCreateAccount, onForgotPassword,
 }: Props) {
   return (
     <AuthLayout eyebrow="WELCOME BACK" title={'Your money,\nmade clearer.'}
@@ -31,6 +32,12 @@ export default function LoginScreen({
         onToggleVisibility={onTogglePassword} />
       <PrimaryButton label="Log in" onPress={onLogin} busy={busy} />
       <LinkText label="Forgot password?" onPress={onForgotPassword} />
+      <View style={s.dividerRow}>
+        <View style={s.divider} />
+        <Text style={s.dividerText}>OR</Text>
+        <View style={s.divider} />
+      </View>
+      <GoogleButton onPress={onGoogleSignIn} busy={busy} />
       <View style={s.dividerRow}>
         <View style={s.divider} />
         <Text style={s.dividerText}>NEW HERE?</Text>
