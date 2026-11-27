@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { TextInput } from 'react-native';
+import { Platform, TextInput } from 'react-native';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { useToast } from '../components/ToastProvider';
 import { supabase } from '../lib/supabase';
 import LoginScreen from './auth/LoginScreen';
@@ -18,6 +20,8 @@ type Mode = 'login' | 'signup' | 'verify' | 'forgot' | 'reset';
 type AuthNotice = { title: string; message: string; kind?: 'success' | 'error' | 'info' };
 const MIN_PASSWORD = 8;
 const OTP_LENGTH = 6;
+
+if (Platform.OS === 'web') WebBrowser.maybeCompleteAuthSession();
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<Mode>('login');
@@ -83,6 +87,42 @@ export default function AuthScreen() {
         throw error;
       }
       return { title: 'Signed in', message: 'Welcome back.' };
+    });
+  }
+
+  async function signInWithGoogle() {
+    await runAuth('Google sign-in failed', async () => {
+      const redirectTo = Linking.createURL('auth/callback');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+      if (error) throw error;
+      if (!data.url) throw new Error('Could not start Google sign-in. Please try again.');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type !== 'success') {
+        return {
+          title: 'Sign-in cancelled',
+          message: 'You can try again anytime.',
+          kind: 'info',
+        };
+      }
+
+      const params = Linking.parse(result.url).queryParams;
+      const getParam = (name: string) => {
+        const value = params?.[name];
+        return typeof value === 'string' ? value : undefined;
+      };
+      const providerError = getParam('error_description') ?? getParam('error');
+      if (providerError) throw new Error(providerError);
+
+      const code = getParam('code');
+      if (!code) throw new Error('Google sign-in did not return an authorization code. Please try again.');
+
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) throw exchangeError;
+      return { title: 'Signed in with Google', message: 'Your account is ready.' };
     });
   }
 
@@ -162,6 +202,7 @@ export default function AuthScreen() {
       <LoginScreen email={email} password={password} busy={busy} showPassword={showPassword}
         onEmailChange={setEmail} onPasswordChange={setPassword}
         onTogglePassword={() => setShowPassword((current) => !current)} onLogin={signIn}
+        onGoogleSignIn={signInWithGoogle}
         onCreateAccount={() => {
           setPassword('');
           setConfirmPassword('');
@@ -181,6 +222,7 @@ export default function AuthScreen() {
         onConfirmPasswordChange={setConfirmPassword}
         onTogglePassword={() => setShowPassword((current) => !current)}
         onToggleConfirmPassword={() => setShowConfirmPassword((current) => !current)}
+        onGoogleSignIn={signInWithGoogle}
         onCreateAccount={signUp}
         onBackToLogin={() => setMode('login')} />
     );
