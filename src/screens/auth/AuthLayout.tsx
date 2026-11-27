@@ -31,7 +31,7 @@ export function AuthLayout({
           <View style={s.brandMark}>
             <Ionicons name="wallet-outline" size={27} color="#FFFFFF" />
           </View>
-          <Text style={s.brandName}>Budget Tracker</Text>
+          <Text style={s.brandName}>Budgetora</Text>
           <View style={s.hero}>
             <Text style={s.eyebrow}>{eyebrow}</Text>
             <Text style={s.title}>{title}</Text>

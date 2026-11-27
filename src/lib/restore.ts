@@ -226,7 +226,7 @@ export async function restoreFromBackup(
     throw new Error('That file is not a valid backup (could not read it as JSON).');
   }
   if (backup?.app !== 'budget-tracker' || !backup.tables) {
-    throw new Error('That file is not a Budget Tracker backup.');
+    throw new Error('That file is not a Budgetora backup.');
   }
 
   if (!isRecord(backup.tables)) {

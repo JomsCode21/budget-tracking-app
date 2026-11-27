@@ -77,7 +77,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <View style={styles.initContainer}>
-          <Text style={styles.initTitle}>Could not start Budget Tracker</Text>
+          <Text style={styles.initTitle}>Could not start Budgetora</Text>
           <Text style={styles.initMessage}>{initError}</Text>
           <Button title={retrying ? 'Retrying...' : 'Retry'} disabled={retrying} onPress={initializeSession} />
         </View>

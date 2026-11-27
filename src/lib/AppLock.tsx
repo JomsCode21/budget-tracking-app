@@ -35,7 +35,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
         if (authenticating.current) return;
         authenticating.current = true;
         try {
-            if (await authenticate('Unlock Budget Tracker')) setLocked(false);
+            if (await authenticate('Unlock Budgetora')) setLocked(false);
         } finally {
             releaseAuthFlag();
         }
@@ -140,7 +140,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
             {children}
             {enabled && locked && (
                 <View style={s.overlay}>
-                    <Text style={s.title}>Budget Tracker is locked</Text>
+                    <Text style={s.title}>Budgetora is locked</Text>
                     <Button title="Unlock" onPress={unlock} />
                 </View>
             )}

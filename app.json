@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "budget-tracker",
+    "name": "Budgetora",
     "slug": "budget-tracker",
     "version": "1.0.0",
     "scheme": "budgettracker",
@@ -12,7 +12,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#200D69",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

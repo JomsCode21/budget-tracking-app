@@ -151,7 +151,7 @@ export default function MoreScreen() {
           <Text style={s.logoutText}>Log out</Text>
         </AnimatedPressable>
 
-        <Text style={s.versionText}>Budget Tracker</Text>
+        <Text style={s.versionText}>Budgetora</Text>
       </ScrollView>
 
       <DeleteConfirmModal
