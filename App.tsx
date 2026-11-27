@@ -7,6 +7,7 @@ import { supabase } from './src/lib/supabase';
 import { syncRecurring } from './src/lib/recurring';
 import { AppLockProvider } from './src/lib/AppLock';
 import { DisplayCurrencyProvider } from './src/components/DisplayCurrency';
+import { ToastProvider } from './src/components/ToastProvider';
 import AuthScreen from './src/screens/AuthScreen';
 import AppTabs from './src/navigation/AppTabs';
 
@@ -86,17 +87,19 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AppLockProvider>
-        {session ? (
-          <DisplayCurrencyProvider>
-            <NavigationContainer>
-              <AppTabs />
-            </NavigationContainer>
-          </DisplayCurrencyProvider>
-        ) : (
-          <AuthScreen />
-        )}
-      </AppLockProvider>
+      <ToastProvider>
+        <AppLockProvider>
+          {session ? (
+            <DisplayCurrencyProvider>
+              <NavigationContainer>
+                <AppTabs />
+              </NavigationContainer>
+            </DisplayCurrencyProvider>
+          ) : (
+            <AuthScreen />
+          )}
+        </AppLockProvider>
+      </ToastProvider>
     </SafeAreaProvider>
   );
 }
