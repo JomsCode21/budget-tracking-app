@@ -1,6 +1,6 @@
 import React from 'react';
-import { TextInput } from 'react-native';
-import { AuthField, AuthLayout, LinkText, PasswordField, PrimaryButton, authStyles as s } from './AuthLayout';
+import { Text, TextInput, View } from 'react-native';
+import { AuthField, AuthLayout, GoogleButton, LinkText, PasswordField, PrimaryButton, authStyles as s } from './AuthLayout';
 
 type Props = {
   email: string;
@@ -14,13 +14,14 @@ type Props = {
   onConfirmPasswordChange: (value: string) => void;
   onTogglePassword: () => void;
   onToggleConfirmPassword: () => void;
+  onGoogleSignIn: () => void;
   onCreateAccount: () => void;
   onBackToLogin: () => void;
 };
 
 export default function SignupScreen({
   email, password, confirmPassword, busy, showPassword, showConfirmPassword, onEmailChange, onPasswordChange,
-  onConfirmPasswordChange, onTogglePassword, onToggleConfirmPassword, onCreateAccount, onBackToLogin,
+  onConfirmPasswordChange, onTogglePassword, onToggleConfirmPassword, onGoogleSignIn, onCreateAccount, onBackToLogin,
 }: Props) {
   return (
     <AuthLayout eyebrow="CREATE YOUR ACCOUNT" title={'A better habit\nstarts here.'}
@@ -36,6 +37,12 @@ export default function SignupScreen({
         placeholder="Re-enter your password" showPassword={showConfirmPassword}
         onToggleVisibility={onToggleConfirmPassword} />
       <PrimaryButton label="Create account" onPress={onCreateAccount} busy={busy} />
+      <View style={s.dividerRow}>
+        <View style={s.divider} />
+        <Text style={s.dividerText}>OR</Text>
+        <View style={s.divider} />
+      </View>
+      <GoogleButton onPress={onGoogleSignIn} busy={busy} />
       <LinkText label="Already have an account? Log in" onPress={onBackToLogin} />
     </AuthLayout>
   );
